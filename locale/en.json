@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Session notifications",
+    "description": "Sends a macOS notification when a turn finishes or a question waits for your answer. DeepSeek Harness is the sender, and a click opens that Session."
+  }
+}

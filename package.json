@@ -1,0 +1,44 @@
+{
+  "name": "dsh-session-bell",
+  "version": "1.0.0",
+  "description": "Desktop notifications for DeepSeek Harness: a finished turn or a pending question, sent by the app itself, and a click opens that Session.",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "notification",
+    "sessions"
+  ],
+  "license": "MIT",
+  "author": "11ze",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/11ze/dsh-session-bell.git"
+  },
+  "homepage": "https://github.com/11ze/dsh-session-bell#readme",
+  "bugs": {
+    "url": "https://github.com/11ze/dsh-session-bell/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "CHANGELOG.md"
+  ],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": { "platform": "web", "immediately": true }
+  }
+}
