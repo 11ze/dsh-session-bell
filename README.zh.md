@@ -5,6 +5,8 @@ DeepSeek Harness 的桌面通知插件。
 回合结束、有提问等你回答，或有审批等你决定时，弹一条系统通知。发送方是
 DeepSeek Harness 本体，不是外部助手应用。点通知直接跳到发起该通知的会话。
 
+![More → Settings 里的「会话通知」分区](assets/screenshot-settings.png)
+
 ## 行为
 
 | 事件 | 通知内容 |
