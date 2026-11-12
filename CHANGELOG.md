@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.2 - 2026-11-12
+
+### Fixes
+
+- The background-only switch now applies to every notification kind. Question
+  and approval events no longer raise a banner while the window is focused. The
+  switch is a normal row and reads "Only notify while this window is in the
+  background".
+- The settings section label is "Notifications". The longer label was clipped in
+  the settings sidebar.
+- All settings text uses one size and color. Removed the storage note.
+
 ## 0.2.1 - 2026-11-12
 
 ### Fixes

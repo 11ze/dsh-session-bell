@@ -16,15 +16,13 @@ window.__ModuleLoader__.load({
     })
 
     const en = {
-      nav: 'Session notifications',
+      nav: 'Notifications',
       title: 'Notifications',
       intro: 'Choose when to interrupt you. Changes apply immediately.',
       turnEnd: 'Turn finished',
       question: 'Question',
       approval: 'Approval',
-      onlyUnfocused: 'Only notify turn-end when this window is in the background',
-      onlyUnfocusedDisabled: 'Turn-end notifications are off',
-      note: 'Settings are stored in this browser.',
+      onlyUnfocused: 'Only notify while this window is in the background',
       permissionGranted: 'Browser notifications are allowed',
       permissionDenied: 'Browser notifications are denied',
       permissionDefault: 'Browser notifications are not enabled',
@@ -51,9 +49,7 @@ window.__ModuleLoader__.load({
       turnEnd: '回合结束',
       question: '提问',
       approval: '审批',
-      onlyUnfocused: '仅后台通知回合结束',
-      onlyUnfocusedDisabled: '回合结束通知已关闭',
-      note: '设置只保存在当前浏览器。',
+      onlyUnfocused: '仅在窗口处于后台时通知',
       permissionGranted: '浏览器通知已允许',
       permissionDenied: '浏览器通知已被拒绝',
       permissionDefault: '浏览器通知尚未授权',
@@ -90,9 +86,8 @@ window.__ModuleLoader__.load({
       }
       .sb-intro {
         margin: 4px 0 0;
-        color: var(--dsw-alias-label-secondary);
-        font-size: 12px;
-        line-height: 19px;
+        font-size: 13px;
+        line-height: 20px;
       }
       .sb-list {
         margin-top: 14px;
@@ -124,11 +119,7 @@ window.__ModuleLoader__.load({
         outline: 2px solid var(--dsw-alias-state-business-primary);
         outline-offset: -2px;
       }
-      .sb-row:disabled { opacity: .45; cursor: default; }
-      .sb-row:disabled:hover { background: transparent; }
       .sb-row-label { font-size: 13px; line-height: 20px; }
-      .sb-row-sub { padding-left: 26px; }
-      .sb-row-sub .sb-row-label { color: var(--dsw-alias-label-secondary); }
       .sb-switch {
         position: relative;
         width: 36px;
@@ -166,9 +157,8 @@ window.__ModuleLoader__.load({
         gap: 7px;
         min-height: 28px;
         margin-top: 14px;
-        color: var(--dsw-alias-label-secondary);
-        font-size: 12px;
-        line-height: 18px;
+        font-size: 13px;
+        line-height: 20px;
       }
       .sb-dot {
         width: 7px;
@@ -186,10 +176,7 @@ window.__ModuleLoader__.load({
         border: 0;
         border-radius: var(--dsw-radius-xs, 4px);
         background: transparent;
-        color: var(--dsw-alias-label-secondary);
         font: inherit;
-        font-size: 12px;
-        line-height: 18px;
         text-decoration: underline;
         text-decoration-color: var(--dsw-alias-border-l3);
         text-underline-offset: 3px;
@@ -202,17 +189,6 @@ window.__ModuleLoader__.load({
       .sb-link:focus-visible {
         outline: 2px solid var(--dsw-alias-state-business-primary);
         outline-offset: 1px;
-      }
-      .sb-hint {
-        color: var(--dsw-alias-label-tertiary);
-        font-size: 11px;
-        line-height: 17px;
-      }
-      .sb-note {
-        margin: 12px 0 0;
-        color: var(--dsw-alias-label-tertiary);
-        font-size: 11px;
-        line-height: 17px;
       }
       @media (prefers-reduced-motion: reduce) {
         .sb-switch, .sb-switch::after { transition: none; }
@@ -366,14 +342,12 @@ window.__ModuleLoader__.load({
       return () => style.remove()
     }
 
-    function SwitchRow({ label, checked, disabled, disabledTitle, sub, onChange }) {
+    function SwitchRow({ label, checked, onChange }) {
       return React.createElement('button', {
         type: 'button',
-        className: sub ? 'sb-row sb-row-sub' : 'sb-row',
+        className: 'sb-row',
         role: 'switch',
         'aria-checked': checked,
-        disabled,
-        title: disabled ? disabledTitle : undefined,
         onClick: () => onChange(!checked),
       },
         React.createElement('span', { className: 'sb-row-label' }, label),
@@ -393,15 +367,11 @@ window.__ModuleLoader__.load({
         () => locale.getSnapshot().revision,
       )
 
-      function row(key, label, sub = false) {
-        const disabled = key === 'onlyUnfocused' && !settings.turnEnd
+      function row(key, label) {
         return React.createElement(SwitchRow, {
           key,
           label,
           checked: settings[key],
-          disabled,
-          disabledTitle: t('onlyUnfocusedDisabled'),
-          sub,
           onChange: (value) => store.set({ [key]: value }),
         })
       }
@@ -421,7 +391,7 @@ window.__ModuleLoader__.load({
             className: 'sb-link',
             onClick: () => { void sendTest(t) },
           }, t('test')),
-          React.createElement('span', { className: 'sb-hint' }, t('permissionHint')),
+          React.createElement('span', null, t('permissionHint')),
         )
       } else if (permissionState === 'denied') {
         permissionNode = React.createElement('div', { className: 'sb-permission' },
@@ -432,7 +402,7 @@ window.__ModuleLoader__.load({
             className: 'sb-link',
             onClick: () => { void requestPermission() },
           }, t('requestAgain')),
-          React.createElement('span', { className: 'sb-hint' }, t('deniedHint')),
+          React.createElement('span', null, t('deniedHint')),
         )
       } else {
         permissionNode = React.createElement('div', { className: 'sb-permission' },
@@ -443,7 +413,7 @@ window.__ModuleLoader__.load({
             className: 'sb-link',
             onClick: () => { void requestPermission() },
           }, t('request')),
-          React.createElement('span', { className: 'sb-hint' }, t('permissionHint')),
+          React.createElement('span', null, t('permissionHint')),
         )
       }
 
@@ -454,10 +424,9 @@ window.__ModuleLoader__.load({
           row('turnEnd', t('turnEnd')),
           row('question', t('question')),
           row('approval', t('approval')),
-          row('onlyUnfocused', t('onlyUnfocused'), true),
+          row('onlyUnfocused', t('onlyUnfocused')),
         ),
         permissionNode,
-        React.createElement('p', { className: 'sb-note' }, t('note')),
       )
     }
 
@@ -503,7 +472,7 @@ window.__ModuleLoader__.load({
           else if (payload.kind === 'approval') enabled = settings.approval
           else return
           if (!enabled) return
-          if (payload.kind === 'turn-end' && settings.onlyUnfocused && isWindowFocused()) return
+          if (settings.onlyUnfocused && isWindowFocused()) return
 
           const body = typeof payload.body === 'string' && payload.body !== ''
             ? payload.body

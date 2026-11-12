@@ -24,19 +24,19 @@ Harness itself, not a helper app. A click opens the Session that raised it.
 
 ## Settings
 
-Open More → Settings, then choose Session notifications in the settings sidebar.
+Open More → Settings, then choose Notifications in the settings sidebar.
 
-![Session notifications in More → Settings](assets/screenshot-settings.png)
+![Notifications in More → Settings](assets/screenshot-settings.png)
 
 | Switch | What it does |
 | --- | --- |
 | Turn finished | Notify when a turn stops. |
 | Question | Notify when a question waits for an answer. |
 | Approval | Notify when an approval waits for a decision. |
-| Only notify turn-end when this window is in the background | When on, a focused window does not show turn-end notifications. When off, every turn end notifies. Default on. Disabled when Turn finished is off. |
+| Only notify while this window is in the background | When on, a focused window shows no notifications. When off, every event notifies. Default on. |
 
-Switches apply immediately; there is no save button. Settings are stored in the
-current browser (localStorage), not in the app configuration. The section shows
+Switches apply immediately; there is no save button. Settings are stored locally
+in the app (localStorage), not in the app configuration. The section shows
 the browser notification permission and a Send test action. This is the page
 permission, not the operating system permission. If no banner appears, open
 System Settings → Notifications → DeepSeek Harness.
@@ -75,7 +75,7 @@ Two halves, one route.
    name only, not the command or reason. No Web server means no route and no
    work, so the CLI stays silent.
 2. Page half (`client.js`) subscribes to that route, filters events by the
-   switches, suppresses turn-end while the window is focused, and calls the
+   switches, suppresses notifications while the window is focused, and calls the
    page's own `Notification` constructor. On click it calls
    `ctx.uiWorkspace.openSession(sessionId)`. Empty bodies are localized in the
    page.

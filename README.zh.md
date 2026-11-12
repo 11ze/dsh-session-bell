@@ -30,9 +30,9 @@ DeepSeek Harness 本体，不是外部助手应用。点通知直接跳到发起
 | 回合结束 | 回合停止时通知。 |
 | 提问 | 有提问等待回答时通知。 |
 | 审批 | 有审批等待决定时通知。 |
-| 仅后台通知回合结束 | 开启时，窗口有焦点就不发回合结束通知；关闭时每次都发。默认开启。关闭“回合结束”后此项不可用。 |
+| 仅在窗口处于后台时通知 | 开启时，窗口有焦点就不发任何通知；关闭时每个事件都发。默认开启。 |
 
-开关立即生效，没有保存按钮。设置存在当前浏览器（localStorage），不写入应用配置。
+开关立即生效，没有保存按钮。设置存在本机应用内（localStorage），不写入应用配置。
 该分区显示浏览器通知权限和“发送测试”。这是页面权限，不是系统权限。
 若一直不弹，去 系统设置 → 通知 → DeepSeek Harness 打开。
 
@@ -63,7 +63,7 @@ dsh-session-bell
 1. 宿主半（`index.js`）监听 `agent/turn-stopping`、`user-questions/request` 和
    `approval/request`，把事件写成 `/session-bell/events` 上的 Server-Sent Events。
    审批只带工具名，不带命令或理由。没有 Web 服务时不注册路由，CLI 下静默。
-2. 页面半（`client.js`）订阅该路由，按开关过滤事件，窗口有焦点时抑制回合结束通知，
+2. 页面半（`client.js`）订阅该路由，按开关过滤事件，窗口有焦点时不发任何通知，
    再用页面自带 `Notification` 构造通知。点击时调用
    `ctx.uiWorkspace.openSession(sessionId)`。空正文由页面本地化。
 

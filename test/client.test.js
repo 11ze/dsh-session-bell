@@ -260,7 +260,7 @@ test('persists a switch immediately', () => {
   })
   const second = switches(page.render())
   assert.equal(second.find((row) => textOf(row) === '回合结束').props['aria-checked'], false)
-  assert.equal(second.find((row) => textOf(row) === '仅后台通知回合结束').props.disabled, true)
+  assert.equal(second.find((row) => textOf(row) === '仅在窗口处于后台时通知').props['aria-checked'], true)
 })
 
 test('an event source failure does not remove the settings page', () => {
@@ -304,7 +304,7 @@ test('denied permission suppresses notifications', () => {
 
 test('turning off background-only lets a focused turn-end notify', () => {
   const page = setup()
-  const onlyUnfocused = switches(page.render()).find((row) => textOf(row) === '仅后台通知回合结束')
+  const onlyUnfocused = switches(page.render()).find((row) => textOf(row) === '仅在窗口处于后台时通知')
   onlyUnfocused.props.onClick()
   page.setFocused(true)
   page.send({ kind: 'turn-end', sessionId: 's1', title: 'Build', body: 'Done.' })
@@ -360,9 +360,21 @@ test('permission status names the browser permission and points to system settin
   assert.match(denied, /在浏览器中允许/)
 })
 
-test('question fallback is localized when the body is empty', () => {
+test('a focused window suppresses questions and approvals too', () => {
   const page = setup()
   page.setFocused(true)
+  page.send({ kind: 'question', sessionId: 's1', title: 'Build', body: '' })
+  page.send({ kind: 'approval', sessionId: 's1', title: 'Build', body: '', meta: { toolName: 'Bash' } })
+  assert.equal(page.notifications.length, 0)
+  page.setFocused(false)
+  page.send({ kind: 'question', sessionId: 's1', title: 'Build', body: '' })
+  page.send({ kind: 'approval', sessionId: 's1', title: 'Build', body: '', meta: { toolName: 'Bash' } })
+  assert.equal(page.notifications.length, 2)
+})
+
+test('question fallback is localized when the body is empty', () => {
+  const page = setup()
+  page.setFocused(false)
   page.send({ kind: 'question', sessionId: 's1', title: 'Build', body: '' })
   assert.equal(page.notifications.length, 1)
   assert.equal(page.notifications[0].options.body, '需要你回答')
