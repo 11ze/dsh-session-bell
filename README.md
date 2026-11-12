@@ -6,7 +6,7 @@ A turn that finishes, a question that waits for your answer, or an approval that
 waits for your decision raises one native notification. The sender is DeepSeek
 Harness itself, not a helper app. A click opens the Session that raised it.
 
-![Session notifications in More → Settings](assets/screenshot-settings.png)
+![A test notification from DeepSeek Harness](assets/screenshot-notification.png)
 
 ## What it does
 
@@ -25,6 +25,8 @@ Harness itself, not a helper app. A click opens the Session that raised it.
 ## Settings
 
 Open More → Settings, then choose Session notifications in the settings sidebar.
+
+![Session notifications in More → Settings](assets/screenshot-settings.png)
 
 | Switch | What it does |
 | --- | --- |
