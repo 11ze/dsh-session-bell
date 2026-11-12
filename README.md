@@ -65,6 +65,23 @@ plugin_manager set_plugin      include:session-bell  enabled:true
 
 Reload the page after changing `client.js`. Reload the plugin after changing `index.js`.
 
+## Releasing
+
+[`.github/workflows/publish.yml`](.github/workflows/publish.yml) publishes on every push to
+`main`, but only when `package.json` names a version that npm does not have yet. It uses npm
+trusted publishing (OIDC), so the repository stores no token, and it attaches provenance.
+
+1. Bump the version and add the CHANGELOG entry.
+2. Push to `main`.
+
+```bash
+npm version patch          # or minor, major
+git push --follow-tags
+```
+
+One setup step lives on npmjs.com: Settings → Trusted publishing must name this repository
+and the workflow file `publish.yml`. Without it the job fails with `ENEEDAUTH`.
+
 ## Layout
 
 | Path | Role |

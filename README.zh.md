@@ -55,6 +55,23 @@ plugin_manager set_plugin      include:session-bell  enabled:false
 plugin_manager set_plugin      include:session-bell  enabled:true
 ```
 
+## 发布
+
+[`.github/workflows/publish.yml`](.github/workflows/publish.yml) 在每次推 `main` 时运行，
+只有当 `package.json` 的版本在 npm 上还不存在时才发布。用 npm trusted publishing（OIDC），
+仓库里不存 token，并附带 provenance。
+
+1. 改版本号，补 CHANGELOG 条目。
+2. 推 `main`。
+
+```bash
+npm version patch          # 或 minor、major
+git push --follow-tags
+```
+
+npmjs.com 上要做一次设置：包 → Settings → Trusted publishing，填本仓库与工作流文件名
+`publish.yml`。没配的话任务会以 `ENEEDAUTH` 失败。
+
 ## 目录
 
 | 路径 | 作用 |
