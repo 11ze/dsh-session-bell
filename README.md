@@ -2,9 +2,9 @@
 
 Desktop notifications for DeepSeek Harness.
 
-A turn that finishes, or a question that waits for your answer, raises one native
-notification. The sender is DeepSeek Harness itself, not a helper app. A click
-opens the Session that raised it.
+A turn that finishes, a question that waits for your answer, or an approval that
+waits for your decision raises one native notification. The sender is DeepSeek
+Harness itself, not a helper app. A click opens the Session that raised it.
 
 ## What it does
 
@@ -12,10 +12,33 @@ opens the Session that raised it.
 | --- | --- |
 | A turn stops (`agent/turn-stopping`) | Session title, then the last assistant text |
 | A question waits for a human (`user-questions/request`) | Session title, then the question |
+| An approval waits for a human (`approval/request`) | Session title, then the tool name |
 
-- Every Session reports. Subagent Sessions stay quiet; their parent turn still reports.
-- Notifications are keyed by Session, so a new one replaces the older banner of the same Session.
+- Every root Session can report. Subagent Sessions stay quiet for all three
+  events; their parent turn still reports.
+- Notifications are keyed by Session and kind, so a question does not replace a
+  turn-end banner.
 - Click: focus the window, then select that Session in the Conversation panel.
+
+## Settings
+
+Open More → Settings, then choose Session notifications in the settings sidebar.
+
+| Switch | What it does |
+| --- | --- |
+| Turn finished | Notify when a turn stops. |
+| Question | Notify when a question waits for an answer. |
+| Approval | Notify when an approval waits for a decision. |
+| Only notify turn-end when this window is in the background | When on, a focused window does not show turn-end notifications. When off, every turn end notifies. Default on. Disabled when Turn finished is off. |
+
+Switches apply immediately; there is no save button. Settings are stored in the
+current browser (localStorage), not in the app configuration. The section shows
+the browser notification permission and a Send test action. This is the page
+permission, not the operating system permission. If no banner appears, open
+System Settings → Notifications → DeepSeek Harness.
+
+Approval notifications appear only when the session asks for approval. A session
+whose approval policy never asks sends no approval notification.
 
 ## Requirements
 
@@ -26,7 +49,8 @@ opens the Session that raised it.
 
 ## Install
 
-In DeepSeek Harness, open Settings → Plugins, choose Install bundle, and enter:
+In DeepSeek Harness, open the Plugins page from the sidebar, choose Install
+bundle, and enter:
 
 ```
 dsh-session-bell
@@ -34,24 +58,33 @@ dsh-session-bell
 
 After the first install, reload the page once (⇧⌘R). The Host half is live at
 install time, but the page half is a browser module and loads only with a fresh page.
+After an update, reload the page and toggle the plugin once. The Host half and the
+page half must come from the same version.
 
 ## How it works
 
 Two halves, one route.
 
-1. Host half (`index.js`) listens to `agent/turn-stopping` and `user-questions/request`.
-   It turns each event into a Server-Sent Event on `/session-bell/events`.
-   No Web server means no route and no work, so the CLI stays silent.
-2. Page half (`client.js`) subscribes to that route, calls the page's own
-   `Notification` constructor, and on click calls `ctx.uiWorkspace.openSession(sessionId)`.
+1. Host half (`index.js`) listens to `agent/turn-stopping`,
+   `user-questions/request`, and `approval/request`. It turns each event into a
+   Server-Sent Event on `/session-bell/events`. For approval it sends the tool
+   name only, not the command or reason. No Web server means no route and no
+   work, so the CLI stays silent.
+2. Page half (`client.js`) subscribes to that route, filters events by the
+   switches, suppresses turn-end while the window is focused, and calls the
+   page's own `Notification` constructor. On click it calls
+   `ctx.uiWorkspace.openSession(sessionId)`. Empty bodies are localized in the
+   page.
 
-The route carries Session id, title, a clipped body, and the event kind. Nothing else
-leaves the machine; there is no network egress and no configuration file.
+The route carries Session id, title, a clipped body, the event kind, and for
+approval the tool name. Settings stay in localStorage. Nothing leaves the
+machine; there is no network egress.
 
 ## Local development
 
 ```bash
 npm install
+npm test
 ```
 
 Link the directory as a bundle, then toggle the plugin once to reload the Host half
@@ -87,10 +120,11 @@ and the workflow file `publish.yml`. Without it the job fails with `ENEEDAUTH`.
 | Path | Role |
 | --- | --- |
 | `index.js` | Host half: events to Server-Sent Events |
-| `client.js` | Page half: notification, click to open the Session |
+| `client.js` | Page half: settings page, notification, click to open the Session |
 | `cordis.patch.yml` | Bundle patch that inserts the Host row |
 | `locale/*.json` | Plugin Manager title and description |
 | `icon.svg` | Plugin Manager icon |
+| `test/` | Node tests for Host events and client filtering |
 
 ## License
 

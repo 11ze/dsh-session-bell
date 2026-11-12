@@ -1,7 +1,7 @@
 {
   "name": "dsh-session-bell",
-  "version": "0.1.0",
-  "description": "Desktop notifications for DeepSeek Harness: a finished turn or a pending question, sent by the app itself, and a click opens that Session.",
+  "version": "0.2.0",
+  "description": "Desktop notifications for DeepSeek Harness: a finished turn, a pending question, or a pending approval, with per-browser switches and a click to open the Session.",
   "keywords": [
     "dsh",
     "deepseek-harness",
@@ -23,6 +23,9 @@
     "node": ">=20"
   },
   "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

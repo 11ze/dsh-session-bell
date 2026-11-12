@@ -23,6 +23,12 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
+      - name: Require test files
+        run: test -d test && test -n "$(find test -type f -name '*.test.js' -print -quit)"
+
+      - name: Test
+        run: npm test
+
       - name: Read package identity
         id: pkg
         run: |

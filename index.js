@@ -1,19 +1,23 @@
 /**
  * Host half of the session notify plugin.
  *
- * It turns two Host events into newline-delimited Server-Sent Events on one
- * Web route: a turn that is about to close, and a question that waits for a
- * human answer. The Client half raises the native notification, so macOS shows
- * DeepSeek Harness as the sender and a click can select that Session.
+ * It turns three Host events into Server-Sent Events on one Web route: a turn
+ * that is about to close, a question that waits for a human answer, and an
+ * approval that waits for a human decision. The Client half raises the native
+ * notification, so macOS shows DeepSeek Harness as the sender and a click can
+ * select that Session.
  *
- * Subagent Sessions are skipped: their parent turn still reports.
+ * Subagent Sessions are skipped for all three events: their parent turn still
+ * reports.
  */
 
 const ROUTE_PATH = '/session-bell/events'
 const HEARTBEAT_MS = 20_000
 const BODY_LIMIT = 140
 
-const collapse = text => text.replace(/\s+/gu, ' ').trim()
+export const inject = ['sessions']
+
+const collapse = text => String(text ?? '').replace(/\s+/gu, ' ').trim()
 
 const clip = (text) => {
   const flat = collapse(text)
@@ -41,16 +45,19 @@ export function apply(ctx) {
   }
 
   const sessions = ctx.get('sessions')
+  if (sessions === undefined) return
   const sessionTitle = ctx.get('sessionTitle')
 
   const sessionOf = sessionId => sessions?.get(sessionId)
 
   const isSubagent = (sessionId) => {
     const session = sessionOf(sessionId)
-    if (session === undefined) return false
+    if (session === undefined) return true
     const header = session.header
     return header?.origin === 'subagent' || (header?.delegationDepth ?? 0) > 0
   }
+
+  const notifyable = sessionId => typeof sessionId === 'string' && !isSubagent(sessionId)
 
   const titleOf = (sessionId) => {
     const session = sessionOf(sessionId)
@@ -71,63 +78,84 @@ export function apply(ctx) {
     return ''
   }
 
-  const describe = (kind, sessionId, body) => ({
+  const describe = (kind, sessionId, body, meta) => ({
     kind,
     sessionId,
     title: titleOf(sessionId),
     body: clip(body),
+    ...(meta === undefined ? {} : { meta }),
     time: Date.now(),
   })
 
   ctx.on('agent/turn-stopping', ({ agent }) => {
-    if (agent === undefined || isSubagent(agent.id)) return
-    const text = lastAssistantText(agent.id)
-    push(describe('turn-end', agent.id, text === '' ? '回合已完成' : text))
+    if (agent === undefined || !notifyable(agent.id)) return
+    push(describe('turn-end', agent.id, lastAssistantText(agent.id)))
   })
 
   ctx.on('user-questions/request', (request, next) => {
     const sessionId = request?.agent?.id
-    if (sessionId !== undefined && !isSubagent(sessionId)) {
+    if (notifyable(sessionId)) {
       const question = request?.questions?.[0]?.question
-      push(describe('question', sessionId, typeof question === 'string' ? question : '需要你回答'))
+      push(describe('question', sessionId, typeof question === 'string' ? question : ''))
     }
     return typeof next === 'function' ? next() : undefined
-  })
+  }, { prepend: true })
 
-  const webServer = ctx.get('webServer')
-  if (webServer === undefined) return
+  ctx.on('approval/request', (request, next) => {
+    const sessionId = request?.agent?.id
+    if (notifyable(sessionId)) {
+      const toolName = request?.toolName
+      push(describe('approval', sessionId, '', typeof toolName === 'string' ? { toolName: clip(toolName) } : undefined))
+    }
+    return typeof next === 'function' ? next() : undefined
+  }, { prepend: true })
 
-  ctx.effect(() => webServer.register({
-    kind: 'exact',
-    path: ROUTE_PATH,
-    handler: (req, res) => {
-      if (req.method !== 'GET') {
-        res.statusCode = 405
-        res.setHeader('Allow', 'GET')
-        res.end()
-        return
-      }
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream; charset=utf-8',
-        'Cache-Control': 'no-cache, no-transform',
-        Connection: 'keep-alive',
-        'X-Accel-Buffering': 'no',
+  ctx.inject(['webServer'], (webCtx) => {
+    webCtx.effect(() => {
+      const dispose = webCtx.webServer.register({
+        kind: 'exact',
+        path: ROUTE_PATH,
+        handler: (req, res) => {
+          if (req.method !== 'GET') {
+            res.statusCode = 405
+            res.setHeader('Allow', 'GET')
+            res.end()
+            return
+          }
+          res.writeHead(200, {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache, no-transform',
+            Connection: 'keep-alive',
+            'X-Accel-Buffering': 'no',
+          })
+          res.write(': connected\n\n')
+          streams.add(res)
+          const heartbeat = setInterval(() => {
+            try {
+              res.write(': ping\n\n')
+            } catch {
+              // The close handler owns cleanup.
+            }
+          }, HEARTBEAT_MS)
+          const close = () => {
+            clearInterval(heartbeat)
+            streams.delete(res)
+          }
+          res.on('close', close)
+          res.on('error', close)
+        },
       })
-      res.write(': connected\n\n')
-      streams.add(res)
-      const heartbeat = setInterval(() => {
-        try {
-          res.write(': ping\n\n')
-        } catch {
-          // The close handler owns cleanup.
+      return () => {
+        dispose?.()
+        for (const stream of streams) {
+          try {
+            stream.end()
+          } catch {
+            // The connection is already gone.
+          }
         }
-      }, HEARTBEAT_MS)
-      const close = () => {
-        clearInterval(heartbeat)
-        streams.delete(res)
+        streams.clear()
       }
-      res.on('close', close)
-      res.on('error', close)
-    },
-  }))
+    })
+  })
 }
