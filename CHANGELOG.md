@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 - 2026-11-12
+
+### Fixes
+
+- The Plugin Manager description names a desktop notification instead of a macOS
+  notification. The page uses the browser Notification API, so the text no longer
+  claims one platform.
+
 ## 0.2.0 - 2026-11-12
 
 ### Features
