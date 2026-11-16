@@ -1,5 +1,7 @@
 # dsh-session-bell
 
+[English](README.md) | 简体中文
+
 DeepSeek Harness 的桌面通知插件。
 
 回合结束、有提问等你回答，或有审批等你决定时，弹一条系统通知。发送方是
@@ -34,7 +36,8 @@ DeepSeek Harness 本体，不是外部助手应用。点通知直接跳到发起
 
 开关立即生效，没有保存按钮。设置存在本机应用内（localStorage），不写入应用配置。
 该分区显示浏览器通知权限和“发送测试”。这是页面权限，不是系统权限。
-若一直不弹，去 系统设置 → 通知 → DeepSeek Harness 打开。
+若一直不弹，允许 DeepSeek Harness 发通知。提示按页面所在系统选路径：macOS 指
+「系统设置 → 通知」，Windows 指「设置 → 系统 → 通知」，其他系统只说去系统通知设置。
 
 审批通知只在会话请求审批时出现；审批策略从不询问的会话不会发审批通知。
 
@@ -42,8 +45,8 @@ DeepSeek Harness 本体，不是外部助手应用。点通知直接跳到发起
 
 - DeepSeek Harness 且启用 Web GUI（桌面版或 `dsh web`）。
 - 窗口必须开着：通知由页面发出，窗口关闭时不发。
-- macOS 需允许 DeepSeek Harness 发通知。若一直不弹，去“系统设置 → 通知 →
-  DeepSeek Harness”打开。
+- 系统需允许 DeepSeek Harness 发通知。macOS 在「系统设置 → 通知」，Windows 在
+  「设置 → 系统 → 通知」，其他系统在各自的系统通知设置里。
 
 ## 安装
 

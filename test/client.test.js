@@ -64,7 +64,12 @@ function switches(tree) {
   return found
 }
 
-function setup({ permission = 'granted', settings, eventSourceThrows = false } = {}) {
+const UA_MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+const UA_WINDOWS = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+const UA_LINUX = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+const UA_IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'
+
+function setup({ permission = 'granted', settings, eventSourceThrows = false, browser } = {}) {
   const storage = new Map()
   if (settings !== undefined) storage.set(STORAGE_KEY, JSON.stringify(settings))
   const notifications = []
@@ -132,6 +137,7 @@ function setup({ permission = 'granted', settings, eventSourceThrows = false } =
     window: null,
   }
   sandbox.window = sandbox
+  if (browser !== undefined) sandbox.navigator = browser
   sandbox.localStorage = {
     getItem(key) {
       return storage.get(key) ?? null
@@ -350,7 +356,7 @@ test('unknown event kinds are ignored', () => {
 })
 
 test('permission status names the browser permission and points to system settings', () => {
-  const granted = textOf(setup().render())
+  const granted = textOf(setup({ browser: { userAgent: UA_MAC } }).render())
   assert.match(granted, /浏览器通知已允许/)
   assert.match(granted, /系统设置/)
   assert.doesNotMatch(granted, /系统通知已允许/)
@@ -358,6 +364,64 @@ test('permission status names the browser permission and points to system settin
   const denied = textOf(setup({ permission: 'denied' }).render())
   assert.match(denied, /浏览器通知已被拒绝/)
   assert.match(denied, /在浏览器中允许/)
+})
+
+test('the permission hint names the Windows settings path on Windows', () => {
+  const text = textOf(setup({ browser: { userAgent: UA_WINDOWS } }).render())
+  assert.match(text, /设置 → 系统 → 通知/)
+  assert.doesNotMatch(text, /系统设置/)
+})
+
+test('the permission hint stays generic on an unknown platform', () => {
+  const text = textOf(setup({ browser: { userAgent: UA_LINUX } }).render())
+  assert.match(text, /系统通知设置/)
+  assert.doesNotMatch(text, /系统设置/)
+  assert.doesNotMatch(text, /Windows/)
+})
+
+test('the declared platform wins over the user agent', () => {
+  const text = textOf(setup({
+    browser: { userAgentData: { platform: 'macOS' }, userAgent: UA_WINDOWS },
+  }).render())
+  assert.match(text, /系统设置 → 通知/)
+  assert.doesNotMatch(text, /设置 → 系统/)
+})
+
+test('an unknown declared platform falls back to the user agent', () => {
+  const text = textOf(setup({
+    browser: { userAgentData: { platform: 'Unknown' }, userAgent: UA_WINDOWS },
+  }).render())
+  assert.match(text, /设置 → 系统 → 通知/)
+})
+
+test('the Windows hint follows the declared platform', () => {
+  const text = textOf(setup({
+    browser: { userAgentData: { platform: 'Windows' }, userAgent: UA_MAC },
+  }).render())
+  assert.match(text, /设置 → 系统 → 通知/)
+  assert.doesNotMatch(text, /系统设置/)
+})
+
+test('a declared non-desktop platform stays generic over the user agent', () => {
+  const text = textOf(setup({
+    browser: { userAgentData: { platform: 'Linux' }, userAgent: UA_WINDOWS },
+  }).render())
+  assert.match(text, /系统通知设置/)
+  assert.doesNotMatch(text, /设置 → 系统/)
+})
+
+test('an iPhone user agent stays generic', () => {
+  const text = textOf(setup({ browser: { userAgent: UA_IPHONE } }).render())
+  assert.match(text, /系统通知设置/)
+  assert.doesNotMatch(text, /系统设置/)
+})
+
+test('an iPad in desktop mode stays generic', () => {
+  const text = textOf(setup({
+    browser: { userAgent: UA_MAC, platform: 'MacIntel', maxTouchPoints: 5 },
+  }).render())
+  assert.match(text, /系统通知设置/)
+  assert.doesNotMatch(text, /系统设置/)
 })
 
 test('a focused window suppresses questions and approvals too', () => {

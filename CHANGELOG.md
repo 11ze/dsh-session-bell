@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.3 - 2026-11-16
+
+### Features
+
+- The notification permission hint names the settings path of the system that
+  renders the page: System Settings → Notifications on macOS, Settings → System →
+  Notifications on Windows, and the generic system notification settings on any
+  other system. Before this change the hint named the macOS path only.
+
+### Changes
+
+- README.md links to the Simplified Chinese README and stays the English default.
+
 ## 0.2.2 - 2026-11-12
 
 ### Fixes

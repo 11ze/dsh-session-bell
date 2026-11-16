@@ -1,5 +1,7 @@
 # dsh-session-bell
 
+English | [简体中文](README.zh.md)
+
 Desktop notifications for DeepSeek Harness.
 
 A turn that finishes, a question that waits for your answer, or an approval that
@@ -38,8 +40,11 @@ Open More → Settings, then choose Notifications in the settings sidebar.
 Switches apply immediately; there is no save button. Settings are stored locally
 in the app (localStorage), not in the app configuration. The section shows
 the browser notification permission and a Send test action. This is the page
-permission, not the operating system permission. If no banner appears, open
-System Settings → Notifications → DeepSeek Harness.
+permission, not the operating system permission. The hint gives the path of the
+system that renders the page: System Settings → Notifications on macOS, Settings
+→ System → Notifications on Windows, and the system notification settings
+elsewhere. If no banner appears, allow DeepSeek Harness to send notifications
+there.
 
 Approval notifications appear only when the session asks for approval. A session
 whose approval policy never asks sends no approval notification.
@@ -48,8 +53,9 @@ whose approval policy never asks sends no approval notification.
 
 - DeepSeek Harness with the Web GUI (Desktop app or `dsh web`).
 - The window must be open. The page raises the notification, so a closed window sends nothing.
-- macOS must allow notifications for DeepSeek Harness. If the first banner never shows,
-  open System Settings → Notifications → DeepSeek Harness and enable it.
+- The operating system must allow notifications for DeepSeek Harness. On macOS,
+  open System Settings → Notifications. On Windows, open Settings → System →
+  Notifications.
 
 ## Install
 

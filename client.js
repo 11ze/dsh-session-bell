@@ -8,6 +8,30 @@ window.__ModuleLoader__.load({
     const STYLE_ID = 'dsh-session-bell-settings'
     const NS = 'session-bell'
 
+    // The banner is raised by the page, so the platform that matters is the one
+    // that renders it: a hosted `dsh web` page can be open on another machine.
+    const PLATFORM = detectPlatform()
+    const HINT_KEY = {
+      macos: 'permissionHintMac',
+      windows: 'permissionHintWindows',
+    }[PLATFORM] ?? 'permissionHintOther'
+
+    function detectPlatform() {
+      if (typeof navigator === 'undefined') return 'other'
+      const declared = navigator.userAgentData?.platform
+      if (declared === 'Windows') return 'windows'
+      if (declared === 'macOS') return 'macos'
+      if (declared !== undefined && declared !== '' && declared !== 'Unknown') return 'other'
+      const agent = typeof navigator.userAgent === 'string' ? navigator.userAgent : ''
+      // iOS and iPadOS render "like Mac OS X" in the user agent; iPadOS in
+      // desktop mode is indistinguishable from macOS except for its touch points.
+      if (/iphone|ipad|ipod/iu.test(agent)) return 'other'
+      if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return 'other'
+      if (/windows/iu.test(agent)) return 'windows'
+      if (/macintosh|mac os x/iu.test(agent)) return 'macos'
+      return 'other'
+    }
+
     const DEFAULTS = Object.freeze({
       turnEnd: true,
       question: true,
@@ -28,7 +52,9 @@ window.__ModuleLoader__.load({
       permissionDefault: 'Browser notifications are not enabled',
       permissionUnsupported: 'Browser notifications are not available here',
       deniedHint: 'Allow notifications for this page in the browser.',
-      permissionHint: 'No banner? Check System Settings → Notifications → DeepSeek Harness.',
+      permissionHintMac: 'No banner? Check System Settings → Notifications → DeepSeek Harness.',
+      permissionHintWindows: 'No banner? Allow DeepSeek Harness in Settings → System → Notifications.',
+      permissionHintOther: 'No banner? Allow DeepSeek Harness in the system notification settings.',
       request: 'Request permission',
       requestAgain: 'Request again',
       test: 'Send test',
@@ -55,7 +81,9 @@ window.__ModuleLoader__.load({
       permissionDefault: '浏览器通知尚未授权',
       permissionUnsupported: '此环境不支持浏览器通知',
       deniedHint: '在浏览器中允许此页面的通知。',
-      permissionHint: '没有横幅？到 系统设置 → 通知 → DeepSeek Harness 打开。',
+      permissionHintMac: '没有横幅？到 系统设置 → 通知 → DeepSeek Harness 打开。',
+      permissionHintWindows: '没有横幅？到 设置 → 系统 → 通知 → DeepSeek Harness 打开。',
+      permissionHintOther: '没有横幅？在系统通知设置里允许 DeepSeek Harness 发通知。',
       request: '请求权限',
       requestAgain: '重新请求',
       test: '发送测试',
@@ -391,7 +419,7 @@ window.__ModuleLoader__.load({
             className: 'sb-link',
             onClick: () => { void sendTest(t) },
           }, t('test')),
-          React.createElement('span', null, t('permissionHint')),
+          React.createElement('span', null, t(HINT_KEY)),
         )
       } else if (permissionState === 'denied') {
         permissionNode = React.createElement('div', { className: 'sb-permission' },
@@ -413,7 +441,7 @@ window.__ModuleLoader__.load({
             className: 'sb-link',
             onClick: () => { void requestPermission() },
           }, t('request')),
-          React.createElement('span', null, t('permissionHint')),
+          React.createElement('span', null, t(HINT_KEY)),
         )
       }
 
