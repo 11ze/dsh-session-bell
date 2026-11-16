@@ -7,6 +7,7 @@ window.__ModuleLoader__.load({
     const STORAGE_KEY = 'dsh-session-bell:settings:v1'
     const STYLE_ID = 'dsh-session-bell-settings'
     const NS = 'session-bell'
+    const RETRY_MS = 3000
 
     // The banner is raised by the page, so the platform that matters is the one
     // that renders it: a hosted `dsh web` page can be open on another machine.
@@ -556,21 +557,66 @@ window.__ModuleLoader__.load({
         }, makeSettingsPage(t, ctx.locale))))
 
         ctx.effect(() => {
-          let source
-          try {
-            source = new EventSource(ROUTE_PATH)
-          } catch (error) {
-            console.warn('[session-bell] cannot subscribe to events', error)
-            return
+          let source = null
+          let timer = null
+          let disposed = false
+
+          const closeStream = () => {
+            if (source === null) return
+            source.onmessage = null
+            source.onerror = null
+            source.close()
+            source = null
           }
-          source.onmessage = (event) => {
+
+          const retry = () => {
+            if (disposed || timer !== null) return
+            timer = setTimeout(() => {
+              timer = null
+              connect()
+            }, RETRY_MS)
+          }
+
+          const connect = () => {
+            if (disposed) return
+            closeStream()
+            let next
             try {
-              show(JSON.parse(event.data))
-            } catch {
-              // A malformed frame must not close the stream.
+              next = new EventSource(ROUTE_PATH)
+            } catch (error) {
+              // No constructor means this surface cannot subscribe at all; a
+              // retry cannot fix that.
+              console.warn('[session-bell] cannot subscribe to events', error)
+              return
+            }
+            source = next
+            next.onmessage = (event) => {
+              try {
+                show(JSON.parse(event.data))
+              } catch {
+                // A malformed frame must not close the stream.
+              }
+            }
+            // A dropped connection is the browser's retry job. A permanently
+            // closed stream is not: the first answer was not an event stream, for
+            // example while the Host was starting or before the route was
+            // registered. Reopen it here, otherwise this window stays silent for
+            // its whole life.
+            next.onerror = () => {
+              if (next.readyState !== EventSource.CLOSED) return
+              closeStream()
+              retry()
             }
           }
-          return () => source.close()
+
+          connect()
+
+          return () => {
+            disposed = true
+            if (timer !== null) clearTimeout(timer)
+            timer = null
+            closeStream()
+          }
         })
 
         if (permission.value === 'default') void requestPermission()

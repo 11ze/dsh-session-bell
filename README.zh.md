@@ -68,7 +68,9 @@ dsh-session-bell
    审批只带工具名，不带命令或理由。没有 Web 服务时不注册路由，CLI 下静默。
 2. 页面半（`client.js`）订阅该路由，按开关过滤事件，窗口有焦点时不发任何通知，
    再用页面自带 `Notification` 构造通知。点击时调用
-   `ctx.uiWorkspace.openSession(sessionId)`。空正文由页面本地化。
+   `ctx.uiWorkspace.openSession(sessionId)`。空正文由页面本地化。浏览器永久关掉
+   这条流（`readyState` 为 CLOSED）时，页面 3 秒后重开，宿主启动得晚也不会让
+   窗口一直静默。
 
 路由带会话 id、标题、截断后的正文、事件类型；审批另带工具名。设置在 localStorage，
 没有网络外发。

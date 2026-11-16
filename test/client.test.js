@@ -69,7 +69,35 @@ const UA_WINDOWS = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 const UA_LINUX = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 const UA_IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'
 
-function setup({ permission = 'granted', settings, eventSourceThrows = false, browser } = {}) {
+function fakeClock() {
+  let now = 0
+  let nextId = 1
+  const pending = []
+  return {
+    setTimeout(handler, delay = 0) {
+      const id = nextId
+      nextId += 1
+      pending.push({ id, at: now + delay, handler })
+      return id
+    },
+    clearTimeout(id) {
+      const index = pending.findIndex((entry) => entry.id === id)
+      if (index >= 0) pending.splice(index, 1)
+    },
+    pending: () => pending.length,
+    tick(delay) {
+      now += delay
+      for (const entry of [...pending]) {
+        const index = pending.indexOf(entry)
+        if (index < 0 || entry.at > now) continue
+        pending.splice(index, 1)
+        entry.handler()
+      }
+    },
+  }
+}
+
+function setup({ permission = 'granted', settings, eventSourceThrows = false, browser, timers } = {}) {
   const storage = new Map()
   if (settings !== undefined) storage.set(STORAGE_KEY, JSON.stringify(settings))
   const notifications = []
@@ -90,13 +118,27 @@ function setup({ permission = 'granted', settings, eventSourceThrows = false, br
   }
 
   class FakeEventSource {
+    static CLOSED = 2
     constructor(url) {
       if (eventSourceThrows) throw new Error('EventSource is unavailable')
       this.url = url
+      this.readyState = 0
+      this.closed = false
       sources.push(this)
     }
     close() {
+      this.readyState = FakeEventSource.CLOSED
       this.closed = true
+    }
+    // A dropped connection stays retryable; EventSource reconnects by itself.
+    drop() {
+      this.readyState = 0
+      if (typeof this.onerror === 'function') this.onerror({})
+    }
+    // A closed stream is final; the browser never retries it.
+    fail() {
+      this.readyState = FakeEventSource.CLOSED
+      if (typeof this.onerror === 'function') this.onerror({})
     }
   }
 
@@ -132,8 +174,8 @@ function setup({ permission = 'granted', settings, eventSourceThrows = false, br
     document,
     Notification: FakeNotification,
     EventSource: FakeEventSource,
-    setTimeout,
-    clearTimeout,
+    setTimeout: timers?.setTimeout ?? setTimeout,
+    clearTimeout: timers?.clearTimeout ?? clearTimeout,
     window: null,
   }
   sandbox.window = sandbox
@@ -203,6 +245,7 @@ function setup({ permission = 'granted', settings, eventSourceThrows = false, br
     },
   }
   const opened = []
+  const disposers = []
   client.apply({
     locale,
     slots,
@@ -212,7 +255,9 @@ function setup({ permission = 'granted', settings, eventSourceThrows = false, br
       },
     },
     effect(run) {
-      return run()
+      const dispose = run()
+      if (typeof dispose === 'function') disposers.push(dispose)
+      return dispose
     },
   })
   notifyRender = rerender
@@ -232,8 +277,12 @@ function setup({ permission = 'granted', settings, eventSourceThrows = false, br
       return renderedTree
     },
     send(payload) {
-      assert.ok(sources[0], 'event source opened')
-      sources[0].onmessage({ data: JSON.stringify(payload) })
+      const open = sources.filter((source) => source.closed !== true)
+      assert.ok(open.length > 0, 'event source opened')
+      for (const source of open) source.onmessage({ data: JSON.stringify(payload) })
+    },
+    dispose() {
+      for (const dispose of disposers) dispose()
     },
     fireStorage(key) {
       for (const handler of windowHandlers.get('storage') ?? []) handler({ key })
@@ -442,4 +491,48 @@ test('question fallback is localized when the body is empty', () => {
   page.send({ kind: 'question', sessionId: 's1', title: 'Build', body: '' })
   assert.equal(page.notifications.length, 1)
   assert.equal(page.notifications[0].options.body, '需要你回答')
+})
+
+test('a closed event stream is reopened and keeps notifying', () => {
+  const clock = fakeClock()
+  const page = setup({ timers: clock })
+  assert.equal(page.sources.length, 1)
+  page.sources[0].fail()
+  assert.equal(page.sources[0].closed, true)
+  assert.equal(page.sources.length, 1)
+  // A second error from the already replaced stream must not add a retry.
+  page.sources[0].fail()
+  assert.equal(clock.pending(), 1)
+  clock.tick(2999)
+  assert.equal(page.sources.length, 1)
+  clock.tick(1)
+  assert.equal(page.sources.length, 2)
+  page.setFocused(false)
+  page.send({ kind: 'turn-end', sessionId: 's1', title: 'Build', body: 'Done.' })
+  assert.equal(page.notifications.length, 1)
+  assert.equal(page.notifications[0].options.body, 'Done.')
+})
+
+test('a dropped connection stays with the browser retry loop', () => {
+  const clock = fakeClock()
+  const page = setup({ timers: clock })
+  page.sources[0].drop()
+  clock.tick(60_000)
+  assert.equal(page.sources.length, 1)
+  assert.equal(page.sources[0].closed, false)
+  page.setFocused(false)
+  page.send({ kind: 'turn-end', sessionId: 's1', title: 'Build', body: 'Done.' })
+  assert.equal(page.notifications.length, 1)
+})
+
+test('a pending reopen is cancelled when the plugin unloads', () => {
+  const clock = fakeClock()
+  const page = setup({ timers: clock })
+  page.sources[0].fail()
+  assert.equal(clock.pending(), 1)
+  page.dispose()
+  assert.equal(page.sources[0].closed, true)
+  assert.equal(clock.pending(), 0)
+  clock.tick(60_000)
+  assert.equal(page.sources.length, 1)
 })

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.4 - 2026-11-16
+
+### Fixes
+
+- The page half reopens `/session-bell/events` three seconds after the browser
+  permanently closes the stream (`readyState` CLOSED). Before this change the
+  page opened the stream once at load and never reopened it, so a stream that
+  failed once left the window silent for the rest of its life: Send test still
+  worked, but real turns, questions, and approvals raised nothing. Observed on
+  the Windows Desktop app.
+
 ## 0.2.3 - 2026-11-16
 
 ### Features

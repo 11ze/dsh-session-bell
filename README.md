@@ -84,7 +84,9 @@ Two halves, one route.
    switches, suppresses notifications while the window is focused, and calls the
    page's own `Notification` constructor. On click it calls
    `ctx.uiWorkspace.openSession(sessionId)`. Empty bodies are localized in the
-   page.
+   page. When the browser permanently closes the stream (`readyState` CLOSED),
+   the page opens a new one after 3 seconds, so a Host that starts late does not
+   leave the window silent for good.
 
 The route carries Session id, title, a clipped body, the event kind, and for
 approval the tool name. Settings stay in localStorage. Nothing leaves the
