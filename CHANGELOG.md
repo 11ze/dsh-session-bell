@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.5 - 2026-11-16
+
+### Fixes
+
+- Real notifications reach Windows at all. The page used the raw
+  `<sessionId>:<kind>` pair as the notification tag, which is 53 characters for
+  a Session id. Chromium builds the Windows toast tag as `n#<origin>#<tag>` — 16
+  more characters for the desktop origin `dsh-app://app` — and Windows silently
+  drops a toast whose tag exceeds 64 characters, with no constructor error and
+  nothing in the console. The tag is now a short hash of the Session id plus the
+  kind: still one tag per Session and kind, at most 16 characters, so every
+  origin fits. Send test was never affected because its tag is 17 characters,
+  which is why the failure looked like "test works, real turns do not".
+
 ## 0.2.4 - 2026-11-16
 
 ### Fixes

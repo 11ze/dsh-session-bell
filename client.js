@@ -337,6 +337,22 @@ window.__ModuleLoader__.load({
       return t('bodyGeneric')
     }
 
+    /**
+     * The tag keeps one Session's banners apart by kind. It cannot be the raw
+     * Session id: Chromium builds the Windows toast tag as `n#<origin>#<tag>`,
+     * that wrapper takes 16 characters for `dsh-app://app`, and Windows
+     * silently drops a toast whose tag is longer than 64 characters. A 32-bit
+     * FNV-1a hash of the Session id is at most seven base-36 characters, which
+     * leaves room for any origin.
+     */
+    function tagOf(sessionId, kind) {
+      let hash = 0x811c9dc5
+      for (let index = 0; index < sessionId.length; index += 1) {
+        hash = Math.imul(hash ^ sessionId.charCodeAt(index), 0x01000193) >>> 0
+      }
+      return `${kind}:${hash.toString(36)}`
+    }
+
     function isWindowFocused() {
       return typeof document !== 'undefined'
         && document.visibilityState === 'visible'
@@ -515,7 +531,7 @@ window.__ModuleLoader__.load({
           try {
             notification = new Notification(title, {
               body,
-              tag: `${payload.sessionId}:${kind}`,
+              tag: tagOf(payload.sessionId, kind),
             })
           } catch (error) {
             console.error('[session-bell] cannot show the notification', error)

@@ -334,7 +334,36 @@ test('turn-end is silent while focused and uses a localized fallback when backgr
   assert.equal(page.notifications.length, 1)
   assert.equal(page.notifications[0].title, 'Build')
   assert.equal(page.notifications[0].options.body, '回合已完成')
-  assert.equal(page.notifications[0].options.tag, 's1:turn-end')
+  assert.equal(page.notifications[0].options.tag, 'turn-end:2b3jk9')
+})
+
+test('the toast tag fits the Windows 64-character budget for every origin and kind', () => {
+  const sessionId = 'session-8ddbc9d2-b69c-4156-808e-8e4b81fb1614'
+  const page = setup()
+  page.setFocused(false)
+  for (const kind of ['turn-end', 'question', 'approval']) {
+    page.send({ kind, sessionId, title: 'Build', body: '', meta: { toolName: 'Bash' } })
+  }
+  assert.equal(page.notifications.length, 3)
+  const tags = page.notifications.map((notification) => notification.options.tag)
+  assert.equal(new Set(tags).size, 3, 'one tag per kind')
+  for (const tag of tags) {
+    // Chromium builds the Windows toast tag as `n#<origin>#<tag>`, and Windows
+    // drops a toast whose tag is longer than 64 characters.
+    assert.ok(`n#dsh-app://app#${tag}`.length <= 64, `desktop origin too long: ${tag}`)
+    assert.ok(`n#http://127.0.0.1:65535#${tag}`.length <= 64, `loopback origin too long: ${tag}`)
+  }
+})
+
+test('the tag is stable for one Session and kind and distinct for another Session', () => {
+  const page = setup()
+  page.setFocused(false)
+  page.send({ kind: 'turn-end', sessionId: 'session-1', title: 'One', body: '' })
+  page.send({ kind: 'turn-end', sessionId: 'session-1', title: 'One again', body: '' })
+  page.send({ kind: 'turn-end', sessionId: 'session-2', title: 'Two', body: '' })
+  const tags = page.notifications.map((notification) => notification.options.tag)
+  assert.equal(tags[0], tags[1], 'the same Session and kind replaces its own banner')
+  assert.notEqual(tags[0], tags[2], 'another Session does not replace it')
 })
 
 test('disabled kinds are filtered and approval uses the tool name', () => {
@@ -347,7 +376,7 @@ test('disabled kinds are filtered and approval uses the tool name', () => {
   page.send({ kind: 'approval', sessionId: 's1', title: 'Build', body: '', meta: { toolName: 'Bash' } })
   assert.equal(page.notifications.length, 1)
   assert.equal(page.notifications[0].options.body, '等待批准：Bash')
-  assert.equal(page.notifications[0].options.tag, 's1:approval')
+  assert.equal(page.notifications[0].options.tag, 'approval:2b3jk9')
 })
 
 test('denied permission suppresses notifications', () => {
