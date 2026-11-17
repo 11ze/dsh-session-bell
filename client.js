@@ -338,19 +338,20 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * The tag keeps one Session's banners apart by kind. It cannot be the raw
-     * Session id: Chromium builds the Windows toast tag as `n#<origin>#<tag>`,
-     * that wrapper takes 16 characters for `dsh-app://app`, and Windows
-     * silently drops a toast whose tag is longer than 64 characters. A 32-bit
-     * FNV-1a hash of the Session id is at most seven base-36 characters, which
-     * leaves room for any origin.
+     * One banner per Session: the tag carries the Session only, so a newer
+     * event replaces the previous banner whatever its kind. It cannot be the
+     * raw Session id: Chromium builds the Windows toast tag as
+     * `n#<origin>#<tag>`, that wrapper takes 16 characters for
+     * `dsh-app://app`, and Windows silently drops a toast whose tag is longer
+     * than 64 characters. A 32-bit FNV-1a hash of the Session id is at most
+     * seven base-36 characters, which leaves room for any origin.
      */
-    function tagOf(sessionId, kind) {
+    function tagOf(sessionId) {
       let hash = 0x811c9dc5
       for (let index = 0; index < sessionId.length; index += 1) {
         hash = Math.imul(hash ^ sessionId.charCodeAt(index), 0x01000193) >>> 0
       }
-      return `${kind}:${hash.toString(36)}`
+      return hash.toString(36)
     }
 
     function isWindowFocused() {
@@ -488,6 +489,9 @@ window.__ModuleLoader__.load({
         const t = ctx.locale.bind(NS)
         permission.refresh()
         let warned = false
+        // The banners this page raised, by Session tag. A newer event for the
+        // same Session closes the previous one, so a Session never stacks two.
+        const banners = new Map()
 
         const open = (sessionId) => {
           window.focus()
@@ -525,21 +529,32 @@ window.__ModuleLoader__.load({
           const title = typeof payload.title === 'string' && payload.title !== ''
             ? payload.title
             : t('appName')
-          const kind = typeof payload.kind === 'string' && payload.kind !== '' ? payload.kind : 'event'
+          const tag = tagOf(payload.sessionId)
+
+          const previous = banners.get(tag)
+          if (previous !== undefined) {
+            banners.delete(tag)
+            previous.close()
+          }
 
           let notification
           try {
             notification = new Notification(title, {
               body,
-              tag: tagOf(payload.sessionId, kind),
+              tag,
             })
           } catch (error) {
             console.error('[session-bell] cannot show the notification', error)
             return
           }
+          banners.set(tag, notification)
+          notification.onclose = () => {
+            if (banners.get(tag) === notification) banners.delete(tag)
+          }
           notification.onclick = () => {
             open(payload.sessionId)
             notification.close()
+            if (banners.get(tag) === notification) banners.delete(tag)
           }
         }
 

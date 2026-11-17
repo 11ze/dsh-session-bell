@@ -20,8 +20,8 @@ Harness itself, not a helper app. A click opens the Session that raised it.
 
 - Every root Session can report. Subagent Sessions stay quiet for all three
   events; their parent turn still reports.
-- Notifications are keyed by Session and kind, so a question does not replace a
-  turn-end banner.
+- Notifications are keyed by Session: a newer event for a Session closes that
+  Session's previous banner, whatever its kind.
 - Click: focus the window, then select that Session in the Conversation panel.
 
 ## Settings
@@ -82,7 +82,8 @@ Two halves, one route.
    work, so the CLI stays silent.
 2. Page half (`client.js`) subscribes to that route, filters events by the
    switches, suppresses notifications while the window is focused, and calls the
-   page's own `Notification` constructor. On click it calls
+   page's own `Notification` constructor. A newer event for the same Session
+   closes that Session's previous banner first. On click it calls
    `ctx.uiWorkspace.openSession(sessionId)`. Empty bodies are localized in the
    page. When the browser permanently closes the stream (`readyState` CLOSED),
    the page opens a new one after 3 seconds, so a Host that starts late does not

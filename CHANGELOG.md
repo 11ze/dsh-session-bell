@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.6 - 2026-11-17
+
+### Changes
+
+- One banner per Session. A newer event for a Session closes that Session's
+  previous banner, whatever its kind, so a question no longer stacks on the
+  turn-end banner of the same Session. The tag is now the Session hash alone;
+  it previously carried the event kind. The page closes the previous banner
+  itself instead of waiting for the operating system to replace it by tag.
+
 ## 0.2.5 - 2026-11-16
 
 ### Fixes
