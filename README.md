@@ -14,7 +14,7 @@ Harness itself, not a helper app. A click opens the Session that raised it.
 
 | Event | Notification |
 | --- | --- |
-| A turn stops (`agent/turn-stopping`) | Session title, then the last assistant text |
+| A turn stops (`agent/turn-stopping`) | Session title, then the first sentence of the last assistant text |
 | A question waits for a human (`user-questions/request`) | Session title, then the question |
 | An approval waits for a human (`approval/request`) | Session title, then the tool name |
 
@@ -23,6 +23,9 @@ Harness itself, not a helper app. A click opens the Session that raised it.
 - Notifications are keyed by Session: a newer event for a Session closes that
   Session's previous banner, whatever its kind.
 - Click: focus the window, then select that Session in the Conversation panel.
+- The body is plain text: Markdown marks are removed, then the text is clipped
+  to 80 characters. A turn-end body keeps its first sentence, a question is not
+  cut at a sentence, and an empty body falls back to the localized label.
 
 ## Settings
 
@@ -38,13 +41,9 @@ Open More → Settings, then choose Notifications in the settings sidebar.
 | Only notify while this window is in the background | When on, a focused window shows no notifications. When off, every event notifies. Default on. |
 
 Switches apply immediately; there is no save button. Settings are stored locally
-in the app (localStorage), not in the app configuration. The section shows
-the browser notification permission and a Send test action. This is the page
-permission, not the operating system permission. The hint gives the path of the
-system that renders the page: System Settings → Notifications on macOS, Settings
-→ System → Notifications on Windows, and the system notification settings
-elsewhere. If no banner appears, allow DeepSeek Harness to send notifications
-there.
+in the app (localStorage), not in the app configuration. The section shows the
+page notification permission and a Send test action; if no banner appears, see
+Requirements for the system permission.
 
 Approval notifications appear only when the session asks for approval. A session
 whose approval policy never asks sends no approval notification.
@@ -81,13 +80,10 @@ Two halves, one route.
    name only, not the command or reason. No Web server means no route and no
    work, so the CLI stays silent.
 2. Page half (`client.js`) subscribes to that route, filters events by the
-   switches, suppresses notifications while the window is focused, and calls the
-   page's own `Notification` constructor. A newer event for the same Session
-   closes that Session's previous banner first. On click it calls
-   `ctx.uiWorkspace.openSession(sessionId)`. Empty bodies are localized in the
-   page. When the browser permanently closes the stream (`readyState` CLOSED),
-   the page opens a new one after 3 seconds, so a Host that starts late does not
-   leave the window silent for good.
+   switches, suppresses notifications while the window is focused, and raises
+   the native notification. A newer event for the same Session closes that
+   Session's previous banner. A click opens that Session, an empty body is
+   localized in the page, and a closed stream reconnects by itself.
 
 The route carries Session id, title, a clipped body, the event kind, and for
 approval the tool name. Settings stay in localStorage. Nothing leaves the
@@ -100,8 +96,7 @@ npm install
 npm test
 ```
 
-Link the directory as a bundle, then toggle the plugin once to reload the Host half
-and reload the page for the Client half:
+Link the directory as a bundle and toggle the plugin once:
 
 ```
 plugin_manager install_bundle  <absolute path to this directory>
@@ -109,7 +104,7 @@ plugin_manager set_plugin      include:session-bell  enabled:false
 plugin_manager set_plugin      include:session-bell  enabled:true
 ```
 
-Reload the page after changing `client.js`. Reload the plugin after changing `index.js`.
+After a change, reload the page for `client.js` and the plugin for `index.js`.
 
 ## Releasing
 

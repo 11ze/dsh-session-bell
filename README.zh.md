@@ -13,13 +13,15 @@ DeepSeek Harness 本体，不是外部助手应用。点通知直接跳到发起
 
 | 事件 | 通知内容 |
 | --- | --- |
-| 回合结束（`agent/turn-stopping`） | 会话标题 + 最后一条回复正文 |
+| 回合结束（`agent/turn-stopping`） | 会话标题 + 最后一条回复的第一句 |
 | 有提问等回答（`user-questions/request`） | 会话标题 + 问题正文 |
 | 有审批等决定（`approval/request`） | 会话标题 + 工具名 |
 
 - 所有根会话都可通知；子代理会话对三类事件都不通知，其父回合照常通知。
 - 按会话去重：同一会话的新事件会关掉该会话的上一条横幅，不论类型。
 - 点击：聚焦窗口，并在会话面板选中该会话。
+- 正文是纯文本：Markdown 标记先去掉，再截到 80 字。回合结束只留第一句，提问不按句
+  截断；剥空时回落到本地化文案。
 
 ## 设置
 
@@ -35,9 +37,7 @@ DeepSeek Harness 本体，不是外部助手应用。点通知直接跳到发起
 | 仅在窗口处于后台时通知 | 开启时，窗口有焦点就不发任何通知；关闭时每个事件都发。默认开启。 |
 
 开关立即生效，没有保存按钮。设置存在本机应用内（localStorage），不写入应用配置。
-该分区显示浏览器通知权限和“发送测试”。这是页面权限，不是系统权限。
-若一直不弹，允许 DeepSeek Harness 发通知。提示按页面所在系统选路径：macOS 指
-「系统设置 → 通知」，Windows 指「设置 → 系统 → 通知」，其他系统只说去系统通知设置。
+该分区显示页面通知权限和“发送测试”；一直不弹的话，系统权限见「要求」。
 
 审批通知只在会话请求审批时出现；审批策略从不询问的会话不会发审批通知。
 
@@ -66,11 +66,9 @@ dsh-session-bell
 1. 宿主半（`index.js`）监听 `agent/turn-stopping`、`user-questions/request` 和
    `approval/request`，把事件写成 `/session-bell/events` 上的 Server-Sent Events。
    审批只带工具名，不带命令或理由。没有 Web 服务时不注册路由，CLI 下静默。
-2. 页面半（`client.js`）订阅该路由，按开关过滤事件，窗口有焦点时不发任何通知，
-   再用页面自带 `Notification` 构造通知。同一会话的新通知会先关掉上一条。点击时调用
-   `ctx.uiWorkspace.openSession(sessionId)`。空正文由页面本地化。浏览器永久关掉
-   这条流（`readyState` 为 CLOSED）时，页面 3 秒后重开，宿主启动得晚也不会让
-   窗口一直静默。
+2. 页面半（`client.js`）订阅该路由，按开关过滤事件，窗口有焦点时不发通知，再用页面
+   自带 `Notification` 弹横幅。同一会话的新通知先关掉上一条；点击跳到该会话；空正文
+   由页面本地化；流断了自动重连。
 
 路由带会话 id、标题、截断后的正文、事件类型；审批另带工具名。设置在 localStorage，
 没有网络外发。
@@ -82,13 +80,15 @@ npm install
 npm test
 ```
 
-把目录当 bundle 装进 profile，然后改宿主半要重启插件、改页面半要刷新页面：
+把目录当 bundle 装进 profile，再切换一次插件：
 
 ```
 plugin_manager install_bundle  <本目录绝对路径>
 plugin_manager set_plugin      include:session-bell  enabled:false
 plugin_manager set_plugin      include:session-bell  enabled:true
 ```
+
+改完 `client.js` 刷新页面，改完 `index.js` 重启插件。
 
 ## 发布
 

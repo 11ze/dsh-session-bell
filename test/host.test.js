@@ -135,6 +135,44 @@ test('turn-end notification carries the title and the last assistant text', (t) 
   assert.ok(Number.isFinite(payloads[0].time))
 })
 
+test('turn-end body drops Markdown a native notification cannot draw', (t) => {
+  const text = [
+    '**改动**：`InterfaceStyle.swift` 新增 `selectedRowText`。',
+    '',
+    '| 文件 | 内容 |',
+    '| --- | --- |',
+    '| `Sidebar.swift` | 改用 `selectedRowText` |',
+  ].join('\n')
+  const sessions = new Map([['root', session({ title: 'Build', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].body, '改动：InterfaceStyle.swift 新增 selectedRowText。')
+})
+
+test('turn-end body keeps the first sentence only', (t) => {
+  const text = '原生已按设计稿同步完。已跑 `swift build`，通过。'
+  const sessions = new Map([['root', session({ title: 'Build', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].body, '原生已按设计稿同步完。')
+})
+
+test('turn-end body stops at 80 characters', (t) => {
+  const text = '一'.repeat(200)
+  const sessions = new Map([['root', session({ title: 'Build', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  const body = frames(chunks)[0].body
+  assert.equal(Array.from(body).length, 80)
+  assert.ok(body.endsWith('…'))
+})
+
 test('an empty turn-end body stays empty so the client can localize it', (t) => {
   const sessions = new Map([['root', session({ title: 'Build' })]])
   const { listeners, connect } = makeCtx(sessions)
@@ -142,6 +180,178 @@ test('an empty turn-end body stays empty so the client can localize it', (t) => 
   t.after(close)
   listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
   assert.equal(frames(chunks)[0].body, '')
+})
+
+test('a turn-end body made only of a table stays empty so the client can localize it', (t) => {
+  const text = '| 文件 | 内容 |\n| --- | --- |\n| A.swift | 新增 |'
+  const sessions = new Map([['root', session({ title: 'Build', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].body, '')
+})
+
+test('turn-end body cuts English at a sentence, not at a version number', (t) => {
+  const text = 'Released v0.2.6. Tests pass.'
+  const sessions = new Map([['root', session({ title: 'Release', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].body, 'Released v0.2.6.')
+})
+
+test('turn-end body drops a fenced code block before the first sentence', (t) => {
+  const text = '```bash\nswift build\n```\n构建已通过。'
+  const sessions = new Map([['root', session({ title: 'Build', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].body, '构建已通过。')
+})
+
+test('turn-end body keeps link text without its URL', (t) => {
+  const text = '见 [日志](https://example.com/log) 里的第 3 行。'
+  const sessions = new Map([['root', session({ title: 'Log', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].body, '见 日志 里的第 3 行。')
+})
+
+test('turn-end body cuts the first sentence of mixed Chinese and English', (t) => {
+  const text = 'Fixed the bug. 重启后生效。'
+  const sessions = new Map([['root', session({ title: 'Fix', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].body, 'Fixed the bug.')
+})
+
+test('turn-end body cuts after a version number that ends a sentence', (t) => {
+  const text = 'Bumped to v1.2. 已发版。'
+  const sessions = new Map([['root', session({ title: 'Release', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].body, 'Bumped to v1.2.')
+})
+
+test('turn-end body keeps a version number before a Chinese sentence', (t) => {
+  const text = '版本 v0.2.6 已发布。'
+  const sessions = new Map([['root', session({ title: 'Release', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].body, '版本 v0.2.6 已发布。')
+})
+
+test('turn-end body does not cut at a question mark inside a URL', (t) => {
+  const text = 'See https://example.com/a?b=1 for details.'
+  const sessions = new Map([['root', session({ title: 'Docs', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].body, 'See https://example.com/a?b=1 for details.')
+})
+
+test('turn-end body does not cut at an abbreviation before Chinese', (t) => {
+  const text = '见 Dr. Smith 的说明。'
+  const sessions = new Map([['root', session({ title: 'Notes', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].body, '见 Dr. Smith 的说明。')
+})
+
+test('turn-end body cuts English at an exclamation mark', (t) => {
+  const text = 'Done! The build is green.'
+  const sessions = new Map([['root', session({ title: 'Build', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].body, 'Done!')
+})
+
+test('turn-end body keeps underscores inside a file name', (t) => {
+  const text = '文件 报告_2026_终稿.docx 已上传。'
+  const sessions = new Map([['root', session({ title: 'Upload', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].body, '文件 报告_2026_终稿.docx 已上传。')
+})
+
+test('turn-end body drops a table whose rows have no leading pipe', (t) => {
+  const text = '文件 | 内容\n--- | ---\nA.swift | 新增\n\n已跑 swift build。'
+  const sessions = new Map([['root', session({ title: 'Build', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].body, '已跑 swift build。')
+})
+
+test('a body of emoji is clipped by character, not by UTF-16 unit', (t) => {
+  const text = '😀'.repeat(200)
+  const sessions = new Map([['root', session({ title: 'Build', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  const body = frames(chunks)[0].body
+  assert.equal(Array.from(body).length, 80)
+  assert.ok(body.endsWith('😀…'))
+})
+
+test('turn-end body keeps asterisks and underscores inside inline code', (t) => {
+  const text = '用 `a*b*c` 和 `__init__.py` 都行。'
+  const sessions = new Map([['root', session({ title: 'Build', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].body, '用 a*b*c 和 __init__.py 都行。')
+})
+
+test('turn-end body drops an unclosed fenced code block', (t) => {
+  const text = '结果如下：\n\n```js\nconst a = 1.5\nreturn a'
+  const sessions = new Map([['root', session({ title: 'Build', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].body, '结果如下：')
+})
+
+test('turn-end body strips nested emphasis', (t) => {
+  const text = '**改动用 *斜体* 说明**。'
+  const sessions = new Map([['root', session({ title: 'Build', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].body, '改动用 斜体 说明。')
+})
+
+test('turn-end body strips underscore emphasis without touching identifiers', (t) => {
+  const text = '变量 foo_bar_baz 保留，_注意_ 去掉。'
+  const sessions = new Map([['root', session({ title: 'Build', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].body, '变量 foo_bar_baz 保留，注意 去掉。')
 })
 
 test('subagent turn-end remains silent', (t) => {
@@ -170,6 +380,32 @@ test('question notification carries the question and delegates', (t) => {
   assert.equal(calls, 1)
   assert.equal(frames(chunks)[0].kind, 'question')
   assert.equal(frames(chunks)[0].body, 'Which option?')
+})
+
+test('question body keeps every sentence and drops Markdown', (t) => {
+  const sessions = new Map([['root', session({ title: 'Question' })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('user-questions/request')({
+    agent: { id: 'root' },
+    questions: [{ question: '用 `pnpm` 还是 `npm`？两个都能装，你定。' }],
+  }, () => 'answer')
+  assert.equal(frames(chunks)[0].body, '用 pnpm 还是 npm？两个都能装，你定。')
+})
+
+test('question body stops at 80 characters', (t) => {
+  const sessions = new Map([['root', session({ title: 'Question' })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('user-questions/request')({
+    agent: { id: 'root' },
+    questions: [{ question: '一'.repeat(200) }],
+  }, () => 'answer')
+  const body = frames(chunks)[0].body
+  assert.equal(Array.from(body).length, 80)
+  assert.ok(body.endsWith('…'))
 })
 
 test('approval notification carries the tool name and delegates', (t) => {
@@ -202,7 +438,7 @@ test('approval tool name is clipped like a body', (t) => {
     () => 'allowed-once',
   )
   const toolName = frames(chunks)[0].meta.toolName
-  assert.equal(toolName.length, 140)
+  assert.equal(toolName.length, 80)
   assert.ok(toolName.endsWith('…'))
 })
 

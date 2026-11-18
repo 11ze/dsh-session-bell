@@ -13,15 +13,107 @@
 
 const ROUTE_PATH = '/session-bell/events'
 const HEARTBEAT_MS = 20_000
-const BODY_LIMIT = 140
+const BODY_LIMIT = 80
 
 export const inject = ['sessions']
 
 const collapse = text => String(text ?? '').replace(/\s+/gu, ' ').trim()
 
 const clip = (text) => {
-  const flat = collapse(text)
-  return flat.length <= BODY_LIMIT ? flat : `${flat.slice(0, BODY_LIMIT - 1)}…`
+  const flat = Array.from(collapse(text))
+  return flat.length <= BODY_LIMIT ? flat.join('') : `${flat.slice(0, BODY_LIMIT - 1).join('')}…`
+}
+
+/**
+ * A native notification draws plain text only. A table leaves its pipes and
+ * alignment row, a fence leaves its backticks, and emphasis leaves its marks,
+ * so a raw Markdown reply reads as noise there. Keep the words, drop the marks.
+ */
+const INLINE_MARKS = [
+  [/!\[([^\]]*)\]\([^)]*\)/gu, '$1'],
+  [/\[([^\]]+)\]\([^)]*\)/gu, '$1'],
+  [/^#{1,6}\s+/u, ''],
+  [/^>\s?/u, ''],
+  [/^(?:[-*+]|\d+[.)])\s+/u, ''],
+  [/\*\*([^*]+)\*\*/gu, '$1'],
+  [/(^|[^*])\*([^*\n]+)\*(?!\*)/gu, '$1$2'],
+  [/(^|[^_])__([^_]+)__(?!_)/gu, '$1$2'],
+  [/(^|[^\w\u3400-\u9fff])_([^_]+)_(?=[^\w]|$)/gu, '$1$2'],
+  [/~~([^~]+)~~/gu, '$1'],
+]
+
+/**
+ * Inline code is raw text: `a*b*c` and `__init__.py` must reach the banner
+ * unchanged, so a placeholder holds each span while the emphasis rules run.
+ */
+const stripMarks = (line) => {
+  const code = []
+  let value = line.replace(/`+([^`]*)`+/gu, (_, inner) => {
+    code.push(inner)
+    return `\u0000${code.length - 1}\u0000`
+  })
+  // Twice: a bold span can hold an italic one, and the first pass uncovers it.
+  for (let pass = 0; pass < 2; pass += 1) {
+    value = INLINE_MARKS.reduce((result, [pattern, replacement]) => result.replace(pattern, replacement), value)
+  }
+  return value.replace(/\u0000(\d+)\u0000/gu, (_, index) => code[Number(index)] ?? '')
+}
+
+const DELIMITER_ROW = /^\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?$/u
+
+const plainText = (text) => {
+  const lines = String(text ?? '')
+    .replace(/```[^\n]*\n[\s\S]*?```/gu, '\n')
+    .replace(/~~~[^\n]*\n[\s\S]*?~~~/gu, '\n')
+    // An unclosed fence runs to the end of the reply.
+    .replace(/(?:^|\n)[ \t]*(?:```|~~~)[\s\S]*$/u, '\n')
+    .split('\n')
+    .map(line => line.trim())
+  const kept = []
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
+    if (line === '') {
+      kept.push('')
+      continue
+    }
+    if (DELIMITER_ROW.test(line)) {
+      // The header sits on the line before, the rows after. Markdown does not
+      // require a leading pipe on either, so the delimiter row is the signal.
+      if (kept.length > 0 && kept[kept.length - 1].includes('|')) kept.pop()
+      while (index + 1 < lines.length && lines[index + 1].includes('|')) index += 1
+      continue
+    }
+    if (line.startsWith('|')) continue
+    if (/^[-*_]{3,}$/u.test(line)) continue
+    kept.push(line)
+  }
+  return kept
+    .map(line => collapse(stripMarks(line)))
+    .filter(line => line !== '')
+    .join(' ')
+}
+
+/**
+ * A notification gets one line of attention. Cut at the first sentence end, and
+ * keep whichever rule ends soonest.
+ *
+ * A full stop, question mark or exclamation mark in full width always ends a
+ * sentence. An ASCII one does only before a space, the end, or Chinese text, so
+ * the question mark in `a?b=1` stays. An English full stop ends a sentence only
+ * when the words before it are English, so `Dr. Smith` and `vs. B` keep going,
+ * and one that a Chinese sentence follows still ends the English part, as in
+ * `Bumped to v1.2. 已发版。`.
+ */
+const firstSentence = (text) => {
+  const endings = [
+    text.match(/^[^。！？]*[。！？]/u),
+    text.match(/^[^。！？!?]*[!?](?=\s|$|[\u3400-\u9fff])/u),
+    text.match(/^((?![\u3400-\u9fff])[\s\S])*?\.(?=\s+["“（(A-Z]|\s*$)/u),
+    text.match(/^[\s\S]*?(?<=[A-Za-z0-9])\.(?=\s+[\u3400-\u9fff])/u),
+  ]
+    .filter(match => match !== null)
+    .map(match => match[0])
+  return endings.reduce((best, value) => (value.length < best.length ? value : best), text)
 }
 
 const textOf = blocks => (Array.isArray(blocks)
@@ -89,14 +181,14 @@ export function apply(ctx) {
 
   ctx.on('agent/turn-stopping', ({ agent }) => {
     if (agent === undefined || !notifyable(agent.id)) return
-    push(describe('turn-end', agent.id, lastAssistantText(agent.id)))
+    push(describe('turn-end', agent.id, firstSentence(plainText(lastAssistantText(agent.id)))))
   })
 
   ctx.on('user-questions/request', (request, next) => {
     const sessionId = request?.agent?.id
     if (notifyable(sessionId)) {
       const question = request?.questions?.[0]?.question
-      push(describe('question', sessionId, typeof question === 'string' ? question : ''))
+      push(describe('question', sessionId, typeof question === 'string' ? plainText(question) : ''))
     }
     return typeof next === 'function' ? next() : undefined
   }, { prepend: true })

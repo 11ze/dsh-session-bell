@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.7 - 2026-11-18
+
+### Fixes
+
+- Notification bodies read as plain text. A native notification does not draw
+  Markdown, so a reply that ended in a table reached the banner as
+  `**改动** | 文件 | 内容 | | --- | --- |` with backticks and pipes. The host half
+  now drops tables, code fences, links and emphasis marks, unwraps inline code,
+  keeps the first sentence of a turn-end reply, and clips the body to 80
+  characters instead of 140. A question is not cut at a sentence, but the same
+  limit applies. A reply with nothing left falls back to the localized label,
+  as before.
+
 ## 0.2.6 - 2026-11-17
 
 ### Changes
