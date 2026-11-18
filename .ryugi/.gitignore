@@ -1,0 +1,8 @@
+config.json
+artifacts/*
+!artifacts/document/
+artifacts/document/*/.artifact-id
+!artifacts/html/
+artifacts/html/*
+!artifacts/html/notification-body/
+artifacts/html/notification-body/.artifact-id
