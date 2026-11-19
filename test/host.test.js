@@ -120,6 +120,15 @@ function frames(chunks) {
     .map((block) => JSON.parse(block.slice(6)))
 }
 
+function turnEndBody(text) {
+  const sessions = new Map([['root', session({ title: 'Build', events: [assistant(text)] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  close()
+  return frames(chunks)[0].body
+}
+
 test('turn-end notification carries the title and the last assistant text', (t) => {
   const sessions = new Map([['root', session({ title: 'Build', events: [assistant('Done.')] })]])
   const { listeners, connect } = makeCtx(sessions)
@@ -270,6 +279,57 @@ test('turn-end body does not cut at an abbreviation before Chinese', (t) => {
   t.after(close)
   listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
   assert.equal(frames(chunks)[0].body, '见 Dr. Smith 的说明。')
+})
+
+test('turn-end body does not cut at an English title abbreviation', () => {
+  assert.equal(
+    turnEndBody('Dr. Smith pushed the fix. Tests pass.'),
+    'Dr. Smith pushed the fix.',
+  )
+})
+
+test('turn-end body does not cut at a dotted abbreviation', () => {
+  assert.equal(
+    turnEndBody('The U.S. team shipped it. Then we rest.'),
+    'The U.S. team shipped it.',
+  )
+})
+
+test('turn-end body still cuts after a short word that ends a sentence', () => {
+  assert.equal(turnEndBody('He said no. Then we left.'), 'He said no.')
+})
+
+test('turn-end body does not read a word ending in an abbreviation as one', () => {
+  assert.equal(turnEndBody('He finished 1st. Then we left.'), 'He finished 1st.')
+})
+
+test('turn-end body does not cut at an abbreviation before a Chinese word', () => {
+  assert.equal(turnEndBody('由 Dr. 王 负责。下一句也一样。'), '由 Dr. 王 负责。')
+})
+
+test('turn-end body does not cut at a degree abbreviation', () => {
+  assert.equal(
+    turnEndBody('The Ph.D. Program starts in fall. Then we rest.'),
+    'The Ph.D. Program starts in fall.',
+  )
+})
+
+test('turn-end body does not cut at an approximate-value label', () => {
+  assert.equal(turnEndBody('Approx. Time: 5 min. Then we ship.'), 'Approx. Time: 5 min.')
+})
+
+test('turn-end body does not cut inside a company name', () => {
+  assert.equal(
+    turnEndBody('Warner Bros. Pictures owns it. Then we rest.'),
+    'Warner Bros. Pictures owns it.',
+  )
+})
+
+test('turn-end body does not cut at an honorific suffix', () => {
+  assert.equal(
+    turnEndBody('Write to Jane Doe, Esq. Notary Public. Then wait.'),
+    'Write to Jane Doe, Esq. Notary Public.',
+  )
 })
 
 test('turn-end body cuts English at an exclamation mark', (t) => {

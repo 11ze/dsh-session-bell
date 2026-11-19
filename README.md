@@ -24,8 +24,9 @@ Harness itself, not a helper app. A click opens the Session that raised it.
   Session's previous banner, whatever its kind.
 - Click: focus the window, then select that Session in the Conversation panel.
 - The body is plain text: Markdown marks are removed, then the text is clipped
-  to 80 characters. A turn-end body keeps its first sentence, a question is not
-  cut at a sentence, and an empty body falls back to the localized label.
+  to 80 characters. A turn-end body keeps its first sentence, though a stop
+  after a known abbreviation such as `Dr.` reads on to the next one; a question
+  is not cut at a sentence, and an empty body falls back to the localized label.
 
 ## Settings
 

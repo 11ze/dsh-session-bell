@@ -93,6 +93,58 @@ const plainText = (text) => {
     .join(' ')
 }
 
+const CJK = /[\u3400-\u9fff]/u
+const ENGLISH_STOP = /^(?:\s+["“（(A-Z]|\s*$)/u
+const CHINESE_STOP = /^\s+[\u3400-\u9fff]/u
+const ALNUM_END = /[A-Za-z0-9]$/u
+// The stop must follow a whole word: `1st.` must not read as the title `st.`
+// just because the digits in front are not letters.
+const WORD_BEFORE_DOT = /(?:^|[^A-Za-z0-9])([A-Za-z][A-Za-z.]*)$/u
+
+/**
+ * Titles, Latin abbreviations and dotted proper nouns never end an English
+ * sentence, so `Dr. Smith` and `U.S. Army` keep going. The list stays short on
+ * purpose: an ordinary word such as `no.` must still close the sentence.
+ */
+const ABBREVIATIONS = new Set([
+  'dr', 'mr', 'mrs', 'ms', 'prof', 'sr', 'jr', 'st', 'mt', 'rev', 'gen', 'col', 'sgt', 'hon',
+  'e.g', 'i.e', 'etc', 'vs', 'cf', 'al', 'viz',
+  'u.s', 'u.k', 'a.m', 'p.m',
+  'fig', 'eq', 'ref', 'inc', 'ltd', 'corp', 'dept',
+  'ph.d', 'approx', 'bros', 'esq',
+])
+
+const abbreviationBefore = (head) => {
+  const word = head.match(WORD_BEFORE_DOT)?.[1].toLowerCase()
+  return word !== undefined && ABBREVIATIONS.has(word)
+}
+
+/**
+ * The first stop that `accepts` allows, unless the word before it is an
+ * abbreviation: then the stop is not an end and the scan moves on. The check
+ * covers every rule, so a title that a Chinese word follows does not cut there
+ * either.
+ */
+const dotEnd = (text, accepts) => {
+  for (let dot = text.indexOf('.'); dot !== -1; dot = text.indexOf('.', dot + 1)) {
+    const head = text.slice(0, dot)
+    if (!accepts(head, text.slice(dot + 1))) continue
+    if (abbreviationBefore(head)) continue
+    return `${head}.`
+  }
+  return null
+}
+
+// An English stop closes a sentence only while the words before it are English.
+const englishDotEnd = text => dotEnd(
+  text, (head, tail) => !CJK.test(head) && ENGLISH_STOP.test(tail),
+)
+
+// A stop in English that a Chinese word follows still ends the English part.
+const chineseDotEnd = text => dotEnd(
+  text, (head, tail) => ALNUM_END.test(head) && CHINESE_STOP.test(tail),
+)
+
 /**
  * A notification gets one line of attention. Cut at the first sentence end, and
  * keep whichever rule ends soonest.
@@ -100,19 +152,17 @@ const plainText = (text) => {
  * A full stop, question mark or exclamation mark in full width always ends a
  * sentence. An ASCII one does only before a space, the end, or Chinese text, so
  * the question mark in `a?b=1` stays. An English full stop ends a sentence only
- * when the words before it are English, so `Dr. Smith` and `vs. B` keep going,
- * and one that a Chinese sentence follows still ends the English part, as in
- * `Bumped to v1.2. 已发版。`.
+ * when the words before it are English, and never right after a title or a Latin
+ * abbreviation, so `Dr. Smith` and `vs. B` keep going. One that a Chinese
+ * sentence follows still ends the English part, as in `Bumped to v1.2. 已发版。`.
  */
 const firstSentence = (text) => {
   const endings = [
-    text.match(/^[^。！？]*[。！？]/u),
-    text.match(/^[^。！？!?]*[!?](?=\s|$|[\u3400-\u9fff])/u),
-    text.match(/^((?![\u3400-\u9fff])[\s\S])*?\.(?=\s+["“（(A-Z]|\s*$)/u),
-    text.match(/^[\s\S]*?(?<=[A-Za-z0-9])\.(?=\s+[\u3400-\u9fff])/u),
-  ]
-    .filter(match => match !== null)
-    .map(match => match[0])
+    text.match(/^[^。！？]*[。！？]/u)?.[0],
+    text.match(/^[^。！？!?]*[!?](?=\s|$|[\u3400-\u9fff])/u)?.[0],
+    englishDotEnd(text),
+    chineseDotEnd(text),
+  ].filter(value => typeof value === 'string')
   return endings.reduce((best, value) => (value.length < best.length ? value : best), text)
 }
 

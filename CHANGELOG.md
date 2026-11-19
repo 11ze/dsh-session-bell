@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.8 - 2026-11-19
+
+### Fixes
+
+- A turn-end body no longer stops at an English title or a Latin abbreviation.
+  `Dr. Smith pushed the fix.` reached the banner as `Dr.` because the sentence
+  rule saw a capital letter after the stop. Titles (`Dr.`, `Mr.`, `Prof.`),
+  Latin forms (`e.g.`, `i.e.`, `etc.`, `vs.`), dotted forms (`U.S.`, `U.K.`,
+  `Ph.D.`) and a few similar forms (`approx.`, `Bros.`, `Esq.`) now read on to
+  the real end, including when a Chinese word follows the stop, as in
+  `由 Dr. 王 负责。`. An ordinary short word still ends the sentence, so
+  `He said no. Then we left.` keeps `He said no.`. The price is the other
+  direction: an abbreviation that really does end a sentence now carries the
+  next one along, as in `He finished his Ph.D. Then he moved.`, still under the
+  80-character limit.
+
 ## 0.2.7 - 2026-11-18
 
 ### Fixes
