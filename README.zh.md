@@ -4,8 +4,9 @@
 
 DeepSeek Harness 的桌面通知插件。
 
-回合结束、有提问等你回答，或有审批等你决定时，弹一条系统通知。发送方是
-DeepSeek Harness 本体，不是外部助手应用。点通知直接跳到发起该通知的会话。
+回合结束、有提问等你回答，或有审批等你决定时，弹一条系统通知。桌面版由
+DeepSeek Harness 本体发送，不是外部助手应用；`dsh web` 的页面由浏览器发送。
+点通知直接跳到发起该通知的会话。
 
 ![DeepSeek Harness 发出的一条测试通知](assets/screenshot-notification.png)
 
@@ -45,8 +46,8 @@ DeepSeek Harness 本体，不是外部助手应用。点通知直接跳到发起
 
 - DeepSeek Harness 且启用 Web GUI（桌面版或 `dsh web`）。
 - 窗口必须开着：通知由页面发出，窗口关闭时不发。
-- 系统需允许 DeepSeek Harness 发通知。macOS 在「系统设置 → 通知」，Windows 在
-  「设置 → 系统 → 通知」，其他系统在各自的系统通知设置里。
+- 系统需允许 DeepSeek Harness（桌面版）或你的浏览器（`dsh web`）发通知。macOS 在
+  「系统设置 → 通知」，Windows 在「设置 → 系统 → 通知」，其他系统在各自的系统通知设置里。
 
 ## 安装
 
@@ -94,7 +95,8 @@ plugin_manager set_plugin      include:session-bell  enabled:true
 
 [`.github/workflows/publish.yml`](.github/workflows/publish.yml) 在每次推 `main` 时运行，
 只有当 `package.json` 的版本在 npm 上还不存在时才发布。用 npm trusted publishing（OIDC），
-仓库里不存 token，并附带 provenance。
+仓库里不存 token，并附带 provenance。它先调用测试工作流；Node 20、22、24 矩阵通过后
+才运行发布任务。
 
 1. 改版本号，补 CHANGELOG 条目。
 2. 推 `main`。

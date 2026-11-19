@@ -97,7 +97,7 @@ function fakeClock() {
   }
 }
 
-function setup({ permission = 'granted', settings, eventSourceThrows = false, browser, timers } = {}) {
+function setup({ permission = 'granted', settings, eventSourceThrows = false, browser, timers, protocol = 'dsh-app:' } = {}) {
   const storage = new Map()
   if (settings !== undefined) storage.set(STORAGE_KEY, JSON.stringify(settings))
   const notifications = []
@@ -174,6 +174,7 @@ function setup({ permission = 'granted', settings, eventSourceThrows = false, br
   const sandbox = {
     console: { warn() {}, error() {}, log() {} },
     document,
+    location: { protocol },
     Notification: FakeNotification,
     EventSource: FakeEventSource,
     setTimeout: timers?.setTimeout ?? setTimeout,
@@ -513,6 +514,20 @@ test('an iPad in desktop mode stays generic', () => {
   }).render())
   assert.match(text, /系统通知设置/)
   assert.doesNotMatch(text, /系统设置/)
+})
+
+test('a browser page points the permission hint at the browser, not the app', () => {
+  const browserMac = textOf(setup({ browser: { userAgent: UA_MAC }, protocol: 'http:' }).render())
+  assert.match(browserMac, /系统设置 → 通知 里允许你的浏览器/)
+  assert.doesNotMatch(browserMac, /DeepSeek Harness/)
+
+  const browserWindows = textOf(setup({ browser: { userAgent: UA_WINDOWS }, protocol: 'http:' }).render())
+  assert.match(browserWindows, /设置 → 系统 → 通知 里允许你的浏览器/)
+  assert.doesNotMatch(browserWindows, /DeepSeek Harness/)
+
+  // The Desktop page keeps the app as the sender: it is the app that raises the banner there.
+  const desktop = textOf(setup({ browser: { userAgent: UA_MAC } }).render())
+  assert.match(desktop, /系统设置 → 通知 → DeepSeek Harness/)
 })
 
 test('a focused window suppresses questions and approvals too', () => {

@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Session notifications",
-    "description": "Sends a desktop notification when a turn finishes, a question waits for your answer, or an approval waits for your decision. DeepSeek Harness is the sender, and a click opens that Session."
+    "description": "Sends a desktop notification when a turn finishes, a question waits for your answer, or an approval waits for your decision. In the Desktop app DeepSeek Harness is the sender; in a browser page (dsh web) the browser is. A click opens that Session."
   }
 }

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.10 - 2026-11-19
+
+### Fixes
+
+- The permission hint names the sender the system actually lists. A `dsh web`
+  page runs in a browser, so the operating system attributes its notifications
+  to that browser: System Settings names Chrome or Safari, not DeepSeek Harness,
+  and the hint sent web users to an entry that does not exist. The page now
+  treats the Desktop origin `dsh-app:` as the app sender and every other origin
+  as browser mode; a browser page points at the browser instead. README.md,
+  README.zh.md, and the Plugin Manager description qualify the sender and the
+  system permission the same way.
+
+### Changes
+
+- Tests also run on pull requests and on Node 20, 22, and 24. The publish
+  workflow waits for that matrix before publishing.
+
 ## 0.2.9 - 2026-11-19
 
 ### Fixes

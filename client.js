@@ -12,10 +12,14 @@ window.__ModuleLoader__.load({
     // The banner is raised by the page, so the platform that matters is the one
     // that renders it: a hosted `dsh web` page can be open on another machine.
     const PLATFORM = detectPlatform()
+    // The Desktop page raises the banner as DeepSeek Harness; a browser page
+    // raises it as that browser, so the system notification settings list the
+    // browser instead. Name the sender the user will actually find there.
+    const DESKTOP_PAGE = typeof location !== 'undefined' && location.protocol === 'dsh-app:'
     const HINT_KEY = {
-      macos: 'permissionHintMac',
-      windows: 'permissionHintWindows',
-    }[PLATFORM] ?? 'permissionHintOther'
+      macos: DESKTOP_PAGE ? 'permissionHintMac' : 'permissionHintBrowserMac',
+      windows: DESKTOP_PAGE ? 'permissionHintWindows' : 'permissionHintBrowserWindows',
+    }[PLATFORM] ?? (DESKTOP_PAGE ? 'permissionHintOther' : 'permissionHintBrowserOther')
 
     function detectPlatform() {
       if (typeof navigator === 'undefined') return 'other'
@@ -56,6 +60,9 @@ window.__ModuleLoader__.load({
       permissionHintMac: 'No banner? Check System Settings → Notifications → DeepSeek Harness.',
       permissionHintWindows: 'No banner? Allow DeepSeek Harness in Settings → System → Notifications.',
       permissionHintOther: 'No banner? Allow DeepSeek Harness in the system notification settings.',
+      permissionHintBrowserMac: 'No banner? Allow your browser in System Settings → Notifications.',
+      permissionHintBrowserWindows: 'No banner? Allow your browser in Settings → System → Notifications.',
+      permissionHintBrowserOther: 'No banner? Allow your browser in the system notification settings.',
       request: 'Request permission',
       requestAgain: 'Request again',
       test: 'Send test',
@@ -85,6 +92,9 @@ window.__ModuleLoader__.load({
       permissionHintMac: '没有横幅？到 系统设置 → 通知 → DeepSeek Harness 打开。',
       permissionHintWindows: '没有横幅？到 设置 → 系统 → 通知 → DeepSeek Harness 打开。',
       permissionHintOther: '没有横幅？在系统通知设置里允许 DeepSeek Harness 发通知。',
+      permissionHintBrowserMac: '没有横幅？在 系统设置 → 通知 里允许你的浏览器发通知。',
+      permissionHintBrowserWindows: '没有横幅？在 设置 → 系统 → 通知 里允许你的浏览器发通知。',
+      permissionHintBrowserOther: '没有横幅？在系统通知设置里允许当前浏览器发通知。',
       request: '请求权限',
       requestAgain: '重新请求',
       test: '发送测试',

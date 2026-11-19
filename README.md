@@ -5,8 +5,9 @@ English | [简体中文](README.zh.md)
 Desktop notifications for DeepSeek Harness.
 
 A turn that finishes, a question that waits for your answer, or an approval that
-waits for your decision raises one native notification. The sender is DeepSeek
-Harness itself, not a helper app. A click opens the Session that raised it.
+waits for your decision raises one native notification. In the Desktop app the
+sender is DeepSeek Harness itself, not a helper app; in a browser page (`dsh web`)
+the browser sends it. A click opens the Session that raised it.
 
 ![A test notification from DeepSeek Harness](assets/screenshot-notification.png)
 
@@ -53,9 +54,9 @@ whose approval policy never asks sends no approval notification.
 
 - DeepSeek Harness with the Web GUI (Desktop app or `dsh web`).
 - The window must be open. The page raises the notification, so a closed window sends nothing.
-- The operating system must allow notifications for DeepSeek Harness. On macOS,
-  open System Settings → Notifications. On Windows, open Settings → System →
-  Notifications.
+- The operating system must allow notifications for DeepSeek Harness (Desktop
+  app) or for your browser (`dsh web`). On macOS, open System Settings →
+  Notifications. On Windows, open Settings → System → Notifications.
 
 ## Install
 
@@ -112,6 +113,8 @@ After a change, reload the page for `client.js` and the plugin for `index.js`.
 [`.github/workflows/publish.yml`](.github/workflows/publish.yml) publishes on every push to
 `main`, but only when `package.json` names a version that npm does not have yet. It uses npm
 trusted publishing (OIDC), so the repository stores no token, and it attaches provenance.
+It calls the test workflow first; the publish job runs only after the Node 20, 22, and 24
+matrix passes.
 
 1. Bump the version and add the CHANGELOG entry.
 2. Push to `main`.

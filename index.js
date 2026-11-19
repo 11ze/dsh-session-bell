@@ -4,8 +4,8 @@
  * It turns three Host events into Server-Sent Events on one Web route: a turn
  * that is about to close, a question that waits for a human answer, and an
  * approval that waits for a human decision. The Client half raises the native
- * notification, so macOS shows DeepSeek Harness as the sender and a click can
- * select that Session.
+ * notification, so the Desktop app shows DeepSeek Harness as the sender and a
+ * click can select that Session.
  *
  * Subagent Sessions are skipped for all three events: their parent turn still
  * reports.
