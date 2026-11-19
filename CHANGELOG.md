@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.9 - 2026-11-19
+
+### Fixes
+
+- Notification titles name the Session again. Every banner showed the app name
+  `DeepSeek Harness` instead, because the host half read `ctx.sessionTitle` once
+  during `apply`: that service injects more than the session store, so it can
+  become active after this plugin, and the captured handle stayed `undefined`
+  for the life of the process. The title is now read per notification, and the
+  app name remains the fallback when no title service is mounted. A missing
+  title service logs one debug line instead of staying silent; the fallback was
+  otherwise indistinguishable from a real title.
+
 ## 0.2.8 - 2026-11-19
 
 ### Fixes

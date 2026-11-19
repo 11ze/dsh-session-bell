@@ -17,10 +17,11 @@ function assistant(text) {
   }
 }
 
-function makeCtx(sessions, { beforeApply, withSessions = true, withWebServer = true } = {}) {
+function makeCtx(sessions, { beforeApply, withSessions = true, withWebServer = true, lateSessionTitle = false } = {}) {
   const listeners = new Map()
   const hooks = new Map()
   const pendingWebServer = []
+  const logs = []
   let route
   const makeWebServer = () => ({
     register(options) {
@@ -31,6 +32,9 @@ function makeCtx(sessions, { beforeApply, withSessions = true, withWebServer = t
     },
   })
   let webServer = withWebServer ? makeWebServer() : undefined
+  // The real title service injects more than the session store, so it can become
+  // active after this plugin. `lateSessionTitle` models that ordering.
+  let sessionTitle = lateSessionTitle ? undefined : { get: (value) => ({ title: value.title }) }
   const childCtx = () => ({
     webServer,
     effect(run) {
@@ -56,7 +60,7 @@ function makeCtx(sessions, { beforeApply, withSessions = true, withWebServer = t
     },
     get(name) {
       if (name === 'sessions') return withSessions ? { get: (id) => sessions.get(id) } : undefined
-      if (name === 'sessionTitle') return { get: (value) => ({ title: value.title }) }
+      if (name === 'sessionTitle') return sessionTitle
       if (name === 'webServer') return webServer
       return undefined
     },
@@ -69,14 +73,23 @@ function makeCtx(sessions, { beforeApply, withSessions = true, withWebServer = t
     effect(run) {
       return run()
     },
+    logger: {
+      debug(message) {
+        logs.push(String(message))
+      },
+    },
   }
   beforeApply?.(ctx)
   apply(ctx)
   return {
     listeners,
+    logs,
     provideWebServer() {
       webServer = makeWebServer()
       for (const callback of pendingWebServer.splice(0)) callback(childCtx())
+    },
+    provideSessionTitle() {
+      sessionTitle = { get: (value) => ({ title: value.title }) }
     },
     connect() {
       const chunks = []
@@ -142,6 +155,36 @@ test('turn-end notification carries the title and the last assistant text', (t) 
   assert.equal(payloads[0].title, 'Build')
   assert.equal(payloads[0].body, 'Done.')
   assert.ok(Number.isFinite(payloads[0].time))
+})
+
+test('turn-end keeps the Session title when the title service mounts after the plugin', (t) => {
+  const sessions = new Map([['root', session({ title: 'Build', events: [assistant('Done.')] })]])
+  const { listeners, connect, provideSessionTitle } = makeCtx(sessions, { lateSessionTitle: true })
+  const { chunks, close } = connect()
+  t.after(close)
+  provideSessionTitle()
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].title, 'Build')
+})
+
+test('turn-end falls back to the app name without a title service', (t) => {
+  const sessions = new Map([['root', session({ title: 'Build', events: [assistant('Done.')] })]])
+  const { listeners, connect } = makeCtx(sessions, { lateSessionTitle: true })
+  const { chunks, close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(frames(chunks)[0].title, 'DeepSeek Harness')
+})
+
+test('a missing title service is logged once, not once per notification', (t) => {
+  const sessions = new Map([['root', session({ title: 'Build', events: [assistant('Done.')] })]])
+  const { listeners, connect, logs } = makeCtx(sessions, { lateSessionTitle: true })
+  const { close } = connect()
+  t.after(close)
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  assert.equal(logs.length, 1)
+  assert.match(logs[0], /title service/u)
 })
 
 test('turn-end body drops Markdown a native notification cannot draw', (t) => {

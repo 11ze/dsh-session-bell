@@ -14,6 +14,8 @@
 const ROUTE_PATH = '/session-bell/events'
 const HEARTBEAT_MS = 20_000
 const BODY_LIMIT = 80
+// Sender the system shows for the app itself; the last resort for a title.
+const APP_NAME = 'DeepSeek Harness'
 
 export const inject = ['sessions']
 
@@ -188,7 +190,6 @@ export function apply(ctx) {
 
   const sessions = ctx.get('sessions')
   if (sessions === undefined) return
-  const sessionTitle = ctx.get('sessionTitle')
 
   const sessionOf = sessionId => sessions?.get(sessionId)
 
@@ -201,10 +202,26 @@ export function apply(ctx) {
 
   const notifyable = sessionId => typeof sessionId === 'string' && !isSubagent(sessionId)
 
+  let reportedMissingTitles = false
+
+  /**
+   * The title service injects more than the session store, so it can become
+   * active after this plugin; read it per notification instead of at apply, or
+   * the handle stays undefined and every banner shows the app name. Say so once
+   * in the log: this fallback is otherwise indistinguishable from a title.
+   */
   const titleOf = (sessionId) => {
     const session = sessionOf(sessionId)
-    if (session === undefined) return 'DeepSeek Harness'
-    return sessionTitle?.get(session)?.title ?? 'DeepSeek Harness'
+    if (session === undefined) return APP_NAME
+    const titles = ctx.get('sessionTitle')
+    if (titles === undefined) {
+      if (!reportedMissingTitles) {
+        reportedMissingTitles = true
+        ctx.logger.debug('session-bell: no session title service; notifications show the app name')
+      }
+      return APP_NAME
+    }
+    return titles.get(session)?.title ?? APP_NAME
   }
 
   const lastAssistantText = (sessionId) => {
