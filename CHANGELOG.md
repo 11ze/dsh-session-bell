@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.11 - 2026-11-20
+
+### Fixes
+
+- Notification titles stop at 30 characters. DSH already caps a fallback title
+  at 40 bytes and a renamed or LLM-written title at 80 bytes, which is longer
+  than a banner's title line. The Host now collapses the title's whitespace and
+  clips it with an ellipsis, the same way it already clipped the body at 80
+  characters, and falls back to the app name when the title is blank or not a
+  string. README.md and README.zh.md document the title budget.
+- The page no longer asks for notification permission on load. It asks when the
+  user turns on a notification switch or clicks Send test, so the request
+  follows a user gesture. Safari may ignore a request without one, and a denial
+  is sticky.
+- README.md and README.zh.md note that the route inherits the web server's
+  binding and has no authentication of its own.
+
 ## 0.2.10 - 2026-11-19
 
 ### Fixes

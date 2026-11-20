@@ -142,6 +142,15 @@ function turnEndBody(text) {
   return frames(chunks)[0].body
 }
 
+function turnEndTitle(title) {
+  const sessions = new Map([['root', session({ title, events: [assistant('Done.')] })]])
+  const { listeners, connect } = makeCtx(sessions)
+  const { chunks, close } = connect()
+  listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
+  close()
+  return frames(chunks)[0].title
+}
+
 test('turn-end notification carries the title and the last assistant text', (t) => {
   const sessions = new Map([['root', session({ title: 'Build', events: [assistant('Done.')] })]])
   const { listeners, connect } = makeCtx(sessions)
@@ -174,6 +183,31 @@ test('turn-end falls back to the app name without a title service', (t) => {
   t.after(close)
   listeners.get('agent/turn-stopping')({ agent: { id: 'root' } })
   assert.equal(frames(chunks)[0].title, 'DeepSeek Harness')
+})
+
+test('turn-end title stops at 30 characters', () => {
+  const title = 'Read-only architecture/test-fidelity rev'
+  assert.equal(turnEndTitle(title), `${Array.from(title).slice(0, 29).join('')}…`)
+})
+
+test('turn-end title of exactly 30 characters is unchanged', () => {
+  const title = 'A'.repeat(30)
+  assert.equal(turnEndTitle(title), title)
+})
+
+test('turn-end title clips an emoji title without splitting a code point', () => {
+  const title = '😀'.repeat(31)
+  const clipped = turnEndTitle(title)
+  assert.equal(Array.from(clipped).length, 30)
+  assert.equal(clipped, `${'😀'.repeat(29)}…`)
+})
+
+test('turn-end falls back to the app name for a blank title', () => {
+  assert.equal(turnEndTitle('   '), 'DeepSeek Harness')
+})
+
+test('turn-end falls back to the app name for a non-string title', () => {
+  assert.equal(turnEndTitle(42), 'DeepSeek Harness')
 })
 
 test('a missing title service is logged once, not once per notification', (t) => {

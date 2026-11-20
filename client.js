@@ -423,12 +423,21 @@ window.__ModuleLoader__.load({
         () => locale.getSnapshot().revision,
       )
 
+      function change(key, value) {
+        store.set({ [key]: value })
+        // Ask from the click that turns notifications on: Safari ignores a
+        // permission request without a user gesture, and a denial is sticky.
+        if (value && key !== 'onlyUnfocused' && currentPermission() === 'default') {
+          void requestPermission()
+        }
+      }
+
       function row(key, label) {
         return React.createElement(SwitchRow, {
           key,
           label,
           checked: settings[key],
-          onChange: (value) => store.set({ [key]: value }),
+          onChange: (value) => change(key, value),
         })
       }
 
@@ -659,8 +668,6 @@ window.__ModuleLoader__.load({
             closeStream()
           }
         })
-
-        if (permission.value === 'default') void requestPermission()
       },
     }
   },

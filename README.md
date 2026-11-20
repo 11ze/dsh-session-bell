@@ -28,6 +28,8 @@ the browser sends it. A click opens the Session that raised it.
   to 80 characters. A turn-end body keeps its first sentence, though a stop
   after a known abbreviation such as `Dr.` reads on to the next one; a question
   is not cut at a sentence, and an empty body falls back to the localized label.
+- The title is plain text too: whitespace is collapsed, then the title is clipped
+  to 30 characters. A blank title falls back to the app name.
 
 ## Settings
 
@@ -43,8 +45,10 @@ Open More → Settings, then choose Notifications in the settings sidebar.
 | Only notify while this window is in the background | When on, a focused window shows no notifications. When off, every event notifies. Default on. |
 
 Switches apply immediately; there is no save button. Settings are stored locally
-in the app (localStorage), not in the app configuration. The section shows the
-page notification permission and a Send test action; if no banner appears, see
+in the app (localStorage), not in the app configuration. Turning on one of the
+three notification switches asks for the page permission when the browser has
+not decided yet; Send test does the same. The section shows the page
+notification permission and a Send test action; if no banner appears, see
 Requirements for the system permission.
 
 Approval notifications appear only when the session asks for approval. A session
@@ -87,9 +91,13 @@ Two halves, one route.
    Session's previous banner. A click opens that Session, an empty body is
    localized in the page, and a closed stream reconnects by itself.
 
-The route carries Session id, title, a clipped body, the event kind, and for
-approval the tool name. Settings stay in localStorage. Nothing leaves the
-machine; there is no network egress.
+The route carries Session id, a clipped title, a clipped body, the event kind,
+and for approval the tool name. Settings stay in localStorage. Nothing leaves
+the machine; there is no network egress.
+
+The route inherits the web server's binding and has no authentication of its
+own. Keep `dsh web` on loopback: a network bind exposes this route along with
+every other one.
 
 ## Local development
 

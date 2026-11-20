@@ -14,6 +14,7 @@
 const ROUTE_PATH = '/session-bell/events'
 const HEARTBEAT_MS = 20_000
 const BODY_LIMIT = 80
+const TITLE_LIMIT = 30
 // Sender the system shows for the app itself; the last resort for a title.
 const APP_NAME = 'DeepSeek Harness'
 
@@ -21,9 +22,9 @@ export const inject = ['sessions']
 
 const collapse = text => String(text ?? '').replace(/\s+/gu, ' ').trim()
 
-const clip = (text) => {
+const clip = (text, limit = BODY_LIMIT) => {
   const flat = Array.from(collapse(text))
-  return flat.length <= BODY_LIMIT ? flat.join('') : `${flat.slice(0, BODY_LIMIT - 1).join('')}…`
+  return flat.length <= limit ? flat.join('') : `${flat.slice(0, limit - 1).join('')}…`
 }
 
 /**
@@ -221,7 +222,8 @@ export function apply(ctx) {
       }
       return APP_NAME
     }
-    return titles.get(session)?.title ?? APP_NAME
+    const title = titles.get(session)?.title
+    return typeof title === 'string' && title.trim() !== '' ? clip(title, TITLE_LIMIT) : APP_NAME
   }
 
   const lastAssistantText = (sessionId) => {

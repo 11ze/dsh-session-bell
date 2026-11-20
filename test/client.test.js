@@ -103,10 +103,14 @@ function setup({ permission = 'granted', settings, eventSourceThrows = false, br
   const notifications = []
   const sources = []
   const windowHandlers = new Map()
+  let permissionRequests = 0
 
   class FakeNotification {
     static permission = permission
-    static requestPermission = async () => permission
+    static requestPermission = async () => {
+      permissionRequests += 1
+      return permission
+    }
     constructor(title, options) {
       this.title = title
       this.options = options
@@ -272,6 +276,9 @@ function setup({ permission = 'granted', settings, eventSourceThrows = false, br
     opened,
     injected,
     pageEntry,
+    get permissionRequests() {
+      return permissionRequests
+    },
     setFocused(value) {
       focused = value
     },
@@ -391,6 +398,30 @@ test('disabled kinds are filtered and approval uses the tool name', () => {
   assert.equal(page.notifications.length, 1)
   assert.equal(page.notifications[0].options.body, '等待批准：Bash')
   assert.equal(page.notifications[0].options.tag, '2b3jk9')
+})
+
+test('loading the page does not request notification permission', () => {
+  const page = setup({ permission: 'default' })
+  assert.equal(page.permissionRequests, 0)
+})
+
+test('enabling a notification switch requests permission', () => {
+  const page = setup({
+    permission: 'default',
+    settings: { turnEnd: false, question: true, approval: true, onlyUnfocused: true },
+  })
+  const turnEnd = switches(page.render()).find((row) => textOf(row) === '回合结束')
+  assert.ok(turnEnd)
+  turnEnd.props.onClick()
+  assert.equal(page.permissionRequests, 1)
+})
+
+test('turning a notification switch off does not request permission', () => {
+  const page = setup({ permission: 'default' })
+  const turnEnd = switches(page.render()).find((row) => textOf(row) === '回合结束')
+  assert.ok(turnEnd)
+  turnEnd.props.onClick()
+  assert.equal(page.permissionRequests, 0)
 })
 
 test('denied permission suppresses notifications', () => {
