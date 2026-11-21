@@ -15,12 +15,20 @@ the browser sends it. A click opens the Session that raised it.
 
 | Event | Notification |
 | --- | --- |
-| A turn stops (`agent/turn-stopping`) | Session title, then the first sentence of the last assistant text |
+| A turn completes (`session/event` → `turn/end`) | Session title, then the first sentence of the last reply |
+| A turn fails or hits the output limit | Session title, then the failure or the limit |
 | A question waits for a human (`user-questions/request`) | Session title, then the question |
-| An approval waits for a human (`approval/request`) | Session title, then the tool name |
+| An approval waits for a human (`approval/request`) | Session title, then the tool and its reason |
 
-- Every root Session can report. Subagent Sessions stay quiet for all three
-  events; their parent turn still reports.
+- Every root Session can report. Subagent Sessions stay quiet for all events;
+  their parent turn still reports.
+- A completion waits 1.5 seconds and stays quiet while a subagent or a background
+  job still works for the same Session, or while the next round of an active goal
+  is already queued. An active goal with no queued round still notifies.
+  A failed turn and an output-limit turn notify immediately. An aborted,
+  interrupted, or blocked turn is silent.
+- An approval body carries the tool name and, when DSH provides one, the reason.
+  A localized `displayReason` is preferred and the raw `reason` is the fallback.
 - Notifications are keyed by Session: a newer event for a Session closes that
   Session's previous banner, whatever its kind.
 - Click: focus the window, then select that Session in the Conversation panel.
@@ -39,7 +47,7 @@ Open More → Settings, then choose Notifications in the settings sidebar.
 
 | Switch | What it does |
 | --- | --- |
-| Turn finished | Notify when a turn stops. |
+| Turn finished | Notify when a turn completes, fails, or hits the output limit. |
 | Question | Notify when a question waits for an answer. |
 | Approval | Notify when an approval waits for a decision. |
 | Only notify while this window is in the background | When on, a focused window shows no notifications. When off, every event notifies. Default on. |
@@ -80,11 +88,14 @@ page half must come from the same version.
 
 Two halves, one route.
 
-1. Host half (`index.js`) listens to `agent/turn-stopping`,
-   `user-questions/request`, and `approval/request`. It turns each event into a
-   Server-Sent Event on `/session-bell/events`. For approval it sends the tool
-   name only, not the command or reason. No Web server means no route and no
-   work, so the CLI stays silent.
+1. Host half (`index.js`) listens to `session/event`, `user-questions/request`,
+   and `approval/request`. For a completed turn it waits 1.5 seconds, asks
+   `workspace/session-activity` whether a subagent or a background job still runs
+   for that Session, and asks the goal service whether the next round of an
+   active goal is already queued; either answer keeps the banner quiet. An
+   active goal with no queued round does not silence a completion. It turns
+   each event into a Server-Sent Event on `/session-bell/events`. No Web server
+   means no route and no work, so the CLI stays silent.
 2. Page half (`client.js`) subscribes to that route, filters events by the
    switches, suppresses notifications while the window is focused, and raises
    the native notification. A newer event for the same Session closes that
@@ -92,7 +103,8 @@ Two halves, one route.
    localized in the page, and a closed stream reconnects by itself.
 
 The route carries Session id, a clipped title, a clipped body, the event kind,
-and for approval the tool name. Settings stay in localStorage. Nothing leaves
+a turn-end status (`completed`, `error`, or `max-tokens`), and for approval the
+tool name and reason. Settings stay in localStorage. Nothing leaves
 the machine; there is no network egress.
 
 The route inherits the web server's binding and has no authentication of its

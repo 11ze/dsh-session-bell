@@ -8,6 +8,8 @@ window.__ModuleLoader__.load({
     const STYLE_ID = 'dsh-session-bell-settings'
     const NS = 'session-bell'
     const RETRY_MS = 3000
+    const BODY_LIMIT = 80
+    const WORD_BREAK_LOOKBACK = 20
 
     // The banner is raised by the page, so the platform that matters is the one
     // that renders it: a hosted `dsh web` page can be open on another machine.
@@ -72,6 +74,10 @@ window.__ModuleLoader__.load({
       bodyQuestion: 'Your answer is needed',
       bodyApproval: 'Your approval is needed',
       bodyApprovalTool: 'Approval needed: {tool}',
+      bodyApprovalReason: 'Approval needed: {tool} — {reason}',
+      bodyError: 'Generation failed: {message}',
+      bodyErrorBare: 'Generation failed',
+      bodyMaxTokens: 'Output token limit reached',
       bodyGeneric: 'New activity',
       appName: 'DeepSeek Harness',
     }
@@ -104,6 +110,10 @@ window.__ModuleLoader__.load({
       bodyQuestion: '需要你回答',
       bodyApproval: '需要你批准',
       bodyApprovalTool: '等待批准：{tool}',
+      bodyApprovalReason: '等待批准：{tool} — {reason}',
+      bodyError: '生成失败：{message}',
+      bodyErrorBare: '生成失败',
+      bodyMaxTokens: '已达到输出 token 上限',
       bodyGeneric: '有新动态',
       appName: 'DeepSeek Harness',
     }
@@ -335,16 +345,55 @@ window.__ModuleLoader__.load({
       return result ?? currentPermission()
     }
 
-    function fallbackBody(payload, t) {
+    function approvalReason(payload, locale) {
+      const meta = payload.meta ?? {}
+      const localized = meta.displayReason
+      if (localized !== null && typeof localized === 'object' && !Array.isArray(localized)) {
+        const keys = [locale, typeof locale === 'string' ? locale.split('-')[0] : '', 'en']
+        for (const key of keys) {
+          if (typeof key !== 'string' || key === '') continue
+          const value = localized[key]
+          if (typeof value === 'string' && value !== '') return value
+        }
+      }
+      return typeof meta.reason === 'string' ? meta.reason : ''
+    }
+
+    function fallbackBody(payload, t, locale) {
       if (payload.kind === 'question') return t('bodyQuestion')
       if (payload.kind === 'approval') {
-        const tool = payload.meta?.toolName
-        return typeof tool === 'string' && tool !== ''
-          ? t('bodyApprovalTool', { tool })
-          : t('bodyApproval')
+        const tool = typeof payload.meta?.toolName === 'string' ? payload.meta.toolName : ''
+        const reason = approvalReason(payload, locale)
+        if (tool !== '' && reason !== '') return t('bodyApprovalReason', { tool, reason })
+        if (tool !== '') return t('bodyApprovalTool', { tool })
+        return t('bodyApproval')
       }
-      if (payload.kind === 'turn-end') return t('bodyTurnEnd')
+      if (payload.kind === 'turn-end') {
+        if (payload.meta?.status === 'error') {
+          const message = typeof payload.meta.error === 'string' ? payload.meta.error : ''
+          return message !== '' ? t('bodyError', { message }) : t('bodyErrorBare')
+        }
+        if (payload.meta?.status === 'max-tokens') return t('bodyMaxTokens')
+        return t('bodyTurnEnd')
+      }
       return t('bodyGeneric')
+    }
+
+    const isAlnum = char => char !== undefined && /[A-Za-z0-9]/u.test(char)
+
+    // The Host already clips its own text; a composed body needs the same cap,
+    // and the same rule: do not split an English word at the boundary.
+    function clipBody(body) {
+      const chars = Array.from(body)
+      if (chars.length <= BODY_LIMIT) return body
+      let end = BODY_LIMIT - 1
+      if (isAlnum(chars[end - 1]) && isAlnum(chars[end])) {
+        let back = end
+        while (back > 0 && end - back < WORD_BREAK_LOOKBACK && isAlnum(chars[back - 1])) back -= 1
+        if (back > 0 && /\s/u.test(chars[back - 1])) end = back - 1
+      }
+      while (end > 0 && /\s/u.test(chars[end - 1])) end -= 1
+      return `${chars.slice(0, Math.max(1, end)).join('')}…`
     }
 
     /**
@@ -542,9 +591,9 @@ window.__ModuleLoader__.load({
           if (!enabled) return
           if (settings.onlyUnfocused && isWindowFocused()) return
 
-          const body = typeof payload.body === 'string' && payload.body !== ''
+          const body = clipBody(typeof payload.body === 'string' && payload.body !== ''
             ? payload.body
-            : fallbackBody(payload, t)
+            : fallbackBody(payload, t, ctx.locale.getSnapshot?.()?.active))
           const title = typeof payload.title === 'string' && payload.title !== ''
             ? payload.title
             : t('appName')

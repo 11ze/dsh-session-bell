@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.3.0 - 2026-11-21
+
+### Features
+
+- Turn-end notifications now distinguish how the turn ended. A completed turn
+  keeps the last reply's first sentence, a failed turn shows the failure text,
+  and a turn that hits the output limit says so. Aborted, interrupted, and
+  blocked turns stay silent.
+- A completed turn waits 1.5 seconds before notifying. If a subagent or a
+  background job still runs for the same Session, or the next round of an active
+  goal is already queued, the notification is dropped; a team lead's intermediate
+  round is no longer reported as the team's result. An active goal with no queued
+  round still notifies, so a disabled goal driver cannot silence a Session. A
+  failing activity query, a missing provider, or a missing goal service never
+  silences a notification.
+- Approval notifications carry DSH's reason as well as the tool name, so the
+  banner says what the approval is for. A localized `displayReason` is preferred
+  and the raw `reason` is the fallback.
+- The reply body is taken from the last assistant text block instead of every
+  text block, keeps the first sentence including a polite opening such as
+  `好的，`, falls back to the whole reply when the first sentence is shorter than
+  12 characters, and clips at a word boundary.
+
+### Fixes
+
+- A running schedule is not treated as work in progress. DSH reports every
+  enabled schedule, so treating it as blocking would keep a recurring Session
+  silent forever; a schedule that starts a turn cancels the pending notification
+  through `turn/start` instead.
 ## 0.2.11 - 2026-11-20
 
 ### Fixes

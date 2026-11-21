@@ -15,6 +15,12 @@ const ROUTE_PATH = '/session-bell/events'
 const HEARTBEAT_MS = 20_000
 const BODY_LIMIT = 80
 const TITLE_LIMIT = 30
+const NOTIFY_DELAY_MS = 1500
+const REPLY_LIMIT = 4000
+const ERROR_LIMIT = 80
+const WORD_BREAK_LOOKBACK = 20
+// A one-word answer such as `Done.` is useless as a banner; show the whole reply.
+const MIN_BODY = 12
 // Sender the system shows for the app itself; the last resort for a title.
 const APP_NAME = 'DeepSeek Harness'
 
@@ -22,9 +28,24 @@ export const inject = ['sessions']
 
 const collapse = text => String(text ?? '').replace(/\s+/gu, ' ').trim()
 
+const isAlnum = char => char !== undefined && /[A-Za-z0-9]/u.test(char)
+
+/**
+ * A native banner has one line. Cut at the limit, but do not split an English
+ * word: back up to the space before it, within a short lookback so one very long
+ * token still gets cut instead of swallowed.
+ */
 const clip = (text, limit = BODY_LIMIT) => {
   const flat = Array.from(collapse(text))
-  return flat.length <= limit ? flat.join('') : `${flat.slice(0, limit - 1).join('')}…`
+  if (flat.length <= limit) return flat.join('')
+  let end = limit - 1
+  if (isAlnum(flat[end - 1]) && isAlnum(flat[end])) {
+    let back = end
+    while (back > 0 && end - back < WORD_BREAK_LOOKBACK && isAlnum(flat[back - 1])) back -= 1
+    if (back > 0 && /\s/u.test(flat[back - 1])) end = back - 1
+  }
+  while (end > 0 && /\s/u.test(flat[end - 1])) end -= 1
+  return `${flat.slice(0, Math.max(1, end)).join('')}…`
 }
 
 /**
@@ -169,11 +190,31 @@ const firstSentence = (text) => {
   return endings.reduce((best, value) => (value.length < best.length ? value : best), text)
 }
 
-const textOf = blocks => (Array.isArray(blocks)
-  ? blocks.filter(block => block?.type === 'text' && typeof block.text === 'string')
-    .map(block => block.text)
-    .join('\n')
-  : '')
+/**
+ * The banner body for a completed turn: plain text, the first sentence unless
+ * it is too short to say anything. A polite opening such as `好的，` stays.
+ */
+const replyBody = (text) => {
+  const plain = plainText(text)
+  const first = firstSentence(plain)
+  return Array.from(first).length < MIN_BODY ? plain : first
+}
+
+/**
+ * DSH sends a localized approval reason next to the raw one. Keep both: the
+ * page picks its locale, while `reason` remains the fallback for a page that
+ * has no translation.
+ */
+const displayReasonOf = (value) => {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const out = {}
+  for (const [locale, text] of Object.entries(value)) {
+    if (typeof text !== 'string') continue
+    const plain = clip(plainText(text))
+    if (plain !== '') out[locale] = plain
+  }
+  return Object.keys(out).length === 0 ? undefined : out
+}
 
 export function apply(ctx) {
   const streams = new Set()
@@ -233,8 +274,16 @@ export function apply(ctx) {
     for (let index = events.length - 1; index >= 0; index -= 1) {
       const event = events[index]
       if (event.type !== 'assistant/message') continue
-      const text = textOf(event.data?.message?.content)
-      if (text.trim() !== '') return text
+      const blocks = event.data?.message?.content
+      if (!Array.isArray(blocks)) continue
+      // The last text block is the reply. Earlier ones are narration before a
+      // tool call, which would read as the result when it is only a preamble.
+      for (let blockIndex = blocks.length - 1; blockIndex >= 0; blockIndex -= 1) {
+        const block = blocks[blockIndex]
+        if (block?.type === 'text' && typeof block.text === 'string' && block.text.trim() !== '') {
+          return block.text.slice(0, REPLY_LIMIT)
+        }
+      }
     }
     return ''
   }
@@ -248,9 +297,133 @@ export function apply(ctx) {
     time: Date.now(),
   })
 
-  ctx.on('agent/turn-stopping', ({ agent }) => {
-    if (agent === undefined || !notifyable(agent.id)) return
-    push(describe('turn-end', agent.id, firstSentence(plainText(lastAssistantText(agent.id)))))
+  const errorText = (error) => {
+    if (typeof error === 'string') return error
+    if (typeof error?.message === 'string') return error.message
+    return ''
+  }
+
+  const pending = new Map()
+  // A turn/start invalidates an in-flight completion check, not just its timer.
+  const generation = new Map()
+
+  const clearPending = (sessionId) => {
+    generation.set(sessionId, (generation.get(sessionId) ?? 0) + 1)
+    const timer = pending.get(sessionId)
+    if (timer === undefined) return
+    clearTimeout(timer)
+    pending.delete(sessionId)
+  }
+
+  /**
+   * A goal keeps driving the same Session round after round; every round ends
+   * with `completed` while the goal is active. Only the last round is news.
+   *
+   * Suppress only when the next goal round is already in the inbox. An active
+   * goal alone is not enough evidence: if the round driver is disabled or has
+   * stopped, nothing will start another turn, and suppressing every completion
+   * would silence the Session until the goal is paused or completed.
+   */
+  const goalRoundQueued = (sessionId) => {
+    const agents = ctx.get('agents')
+    const goals = ctx.get('goals')
+    if (agents === undefined || goals === undefined) return false
+    try {
+      const agent = agents.get(sessionId)
+      if (agent === undefined) return false
+      const goal = goals.get(agent)
+      if (goal === undefined || goal === null) return false
+      if (goal.phase !== 'active' || goal.activation !== 'armed') return false
+      if (typeof goal.roundsStarted !== 'number' || typeof goal.maxGoalRounds !== 'number') return false
+      if (goal.roundsStarted >= goal.maxGoalRounds) return false
+      const inbox = agent.inbox
+      if (inbox === undefined || inbox === null) return false
+      const queued = [...(inbox.nextTurn ?? []), ...(inbox.nextStep ?? [])]
+      return queued.some((message) => {
+        const source = message?.source
+        return source?.kind === 'goal'
+          && typeof source.round === 'number'
+          && source.round > 0
+          && (typeof goal.id !== 'string' || source.goalId === goal.id)
+      })
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * A turn can end while a subagent or a background job still works for the
+   * same Session. The finished turn itself still reports as `turn`, so only the
+   * other kinds block the notification. A schedule is not blocking: DSH answers
+   * with every enabled schedule, not only a running one, so a recurring reminder
+   * would silence the Session forever. A schedule that starts a turn cancels the
+   * pending notification through `turn/start`.
+   */
+  const hasRunningWork = async (sessionId) => {
+    if (typeof ctx.waterfall !== 'function') return false
+    try {
+      const activity = await ctx.waterfall.call(
+        ctx,
+        'workspace/session-activity',
+        { sessionId },
+        () => Promise.resolve([]),
+      )
+      if (!Array.isArray(activity)) return false
+      return activity.some(entry => entry?.kind === 'subagent' || entry?.kind === 'job')
+    } catch {
+      // Never silence a notification because the activity service is missing.
+      return false
+    }
+  }
+
+  const scheduleTurnEnd = (sessionId, body) => {
+    clearPending(sessionId)
+    const token = generation.get(sessionId)
+    const timer = setTimeout(async () => {
+      pending.delete(sessionId)
+      if (!notifyable(sessionId)) return
+      if (goalRoundQueued(sessionId)) return
+      if (await hasRunningWork(sessionId)) return
+      if (generation.get(sessionId) !== token) return
+      push(describe('turn-end', sessionId, body, { status: 'completed' }))
+    }, NOTIFY_DELAY_MS)
+    timer.unref?.()
+    pending.set(sessionId, timer)
+  }
+
+  const onTurnEnd = (sessionId, reason) => {
+    const kind = reason?.kind
+    if (kind === 'completed') {
+      scheduleTurnEnd(sessionId, replyBody(lastAssistantText(sessionId)))
+      return
+    }
+    if (kind === 'error') {
+      const message = errorText(reason.error)
+      const meta = message.trim() === ''
+        ? { status: 'error' }
+        : { status: 'error', error: clip(plainText(message), ERROR_LIMIT) }
+      push(describe('turn-end', sessionId, '', meta))
+      return
+    }
+    if (kind === 'max-tokens') {
+      push(describe('turn-end', sessionId, '', { status: 'max-tokens' }))
+    }
+  }
+
+  ctx.on('session/event', (session, event) => {
+    const sessionId = session?.id
+    if (!notifyable(sessionId)) return
+    if (event?.type === 'turn/start') {
+      clearPending(sessionId)
+      return
+    }
+    if (event?.type !== 'turn/end') return
+    onTurnEnd(sessionId, event.data?.reason)
+  })
+
+  ctx.effect(() => () => {
+    for (const timer of pending.values()) clearTimeout(timer)
+    pending.clear()
   })
 
   ctx.on('user-questions/request', (request, next) => {
@@ -265,8 +438,14 @@ export function apply(ctx) {
   ctx.on('approval/request', (request, next) => {
     const sessionId = request?.agent?.id
     if (notifyable(sessionId)) {
+      const meta = {}
       const toolName = request?.toolName
-      push(describe('approval', sessionId, '', typeof toolName === 'string' ? { toolName: clip(toolName) } : undefined))
+      if (typeof toolName === 'string') meta.toolName = clip(toolName)
+      const reason = request?.reason
+      if (typeof reason === 'string' && reason.trim() !== '') meta.reason = clip(plainText(reason))
+      const displayReason = displayReasonOf(request?.displayReason)
+      if (displayReason !== undefined) meta.displayReason = displayReason
+      push(describe('approval', sessionId, '', Object.keys(meta).length === 0 ? undefined : meta))
     }
     return typeof next === 'function' ? next() : undefined
   }, { prepend: true })

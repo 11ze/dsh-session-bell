@@ -223,19 +223,23 @@ function setup({ permission = 'granted', settings, eventSourceThrows = false, br
     assert.ok(pageEntry, 'row config page registered')
     renderedTree = resolve(pageEntry.component({ view: 'page' }))
   }
+  let activeLocale = 'zh'
+  let dictionaries = {}
   const locale = {
     register(_namespace, dictionary) {
+      dictionaries = dictionary
       translations.clear()
       for (const [key, value] of Object.entries(dictionary.zh)) translations.set(key, value)
     },
     bind() {
       return (key, params = {}) => {
-        const value = translations.get(key) ?? key
+        const dictionary = dictionaries[activeLocale] ?? dictionaries.zh ?? {}
+        const value = dictionary[key] ?? key
         return value.replace(/\{(\w+)\}/g, (_, name) => params[name] ?? '')
       }
     },
     getSnapshot() {
-      return { revision: 1 }
+      return { active: activeLocale, revision: 1 }
     },
     subscribe() {
       return () => {}
@@ -281,6 +285,9 @@ function setup({ permission = 'granted', settings, eventSourceThrows = false, br
     },
     setFocused(value) {
       focused = value
+    },
+    setLocale(value) {
+      activeLocale = value
     },
     render() {
       if (renderedTree === undefined) rerender()
@@ -623,4 +630,131 @@ test('a pending reopen is cancelled when the plugin unloads', () => {
   assert.equal(clock.pending(), 0)
   clock.tick(60_000)
   assert.equal(page.sources.length, 1)
+})
+
+test('an error turn shows the localized failure text', () => {
+  const page = setup()
+  page.setFocused(false)
+  page.send({
+    kind: 'turn-end',
+    sessionId: 's1',
+    title: 'Build',
+    body: '',
+    meta: { status: 'error', error: 'model overloaded' },
+  })
+  assert.equal(page.notifications.length, 1)
+  assert.equal(page.notifications[0].options.body, '生成失败：model overloaded')
+})
+
+test('an error turn without a message shows the bare failure text', () => {
+  const page = setup()
+  page.setFocused(false)
+  page.send({ kind: 'turn-end', sessionId: 's1', title: 'Build', body: '', meta: { status: 'error' } })
+  assert.equal(page.notifications[0].options.body, '生成失败')
+})
+
+test('a max-tokens turn shows the output limit text', () => {
+  const page = setup()
+  page.setFocused(false)
+  page.send({ kind: 'turn-end', sessionId: 's1', title: 'Build', body: '', meta: { status: 'max-tokens' } })
+  assert.equal(page.notifications[0].options.body, '已达到输出 token 上限')
+})
+
+test('an approval with a reason shows the tool and the reason', () => {
+  const page = setup()
+  page.setFocused(false)
+  page.send({
+    kind: 'approval',
+    sessionId: 's1',
+    title: 'Build',
+    body: '',
+    meta: { toolName: 'Bash', reason: '需要写入 /tmp/out.txt' },
+  })
+  assert.equal(page.notifications[0].options.body, '等待批准：Bash — 需要写入 /tmp/out.txt')
+})
+
+test('an approval reason without a tool falls back to the plain approval text', () => {
+  const page = setup()
+  page.setFocused(false)
+  page.send({ kind: 'approval', sessionId: 's1', title: 'Build', body: '', meta: { reason: '确认一下' } })
+  assert.equal(page.notifications[0].options.body, '需要你批准')
+})
+
+test('an approval display reason follows the active locale', () => {
+  const page = setup()
+  page.setFocused(false)
+  const meta = {
+    toolName: 'Bash',
+    reason: 'escalate sandbox to danger-full-access',
+    displayReason: { en: 'Allow sandbox escalation?', zh: '允许升级沙箱？' },
+  }
+  page.send({ kind: 'approval', sessionId: 's1', title: 'Build', body: '', meta })
+  assert.equal(page.notifications[0].options.body, '等待批准：Bash — 允许升级沙箱？')
+  page.setLocale('en')
+  page.send({ kind: 'approval', sessionId: 's2', title: 'Build', body: '', meta })
+  assert.equal(page.notifications[1].options.body, 'Approval needed: Bash — Allow sandbox escalation?')
+})
+
+test('an approval display reason falls back to the raw reason', () => {
+  const page = setup()
+  page.setFocused(false)
+  page.send({
+    kind: 'approval',
+    sessionId: 's1',
+    title: 'Build',
+    body: '',
+    meta: {
+      toolName: 'Bash',
+      reason: 'escalate sandbox to danger-full-access',
+      displayReason: { ja: 'サンドボックスを昇格しますか？' },
+    },
+  })
+  assert.equal(
+    page.notifications[0].options.body,
+    '等待批准：Bash — escalate sandbox to danger-full-access',
+  )
+})
+
+test('a composed body splits at a word boundary', () => {
+  const page = setup()
+  page.setFocused(false)
+  page.send({
+    kind: 'approval',
+    sessionId: 's1',
+    title: 'Build',
+    body: '',
+    meta: { toolName: 'Bash', reason: `${'x'.repeat(60)} supercalifragilisticexpialidocious` },
+  })
+  const body = page.notifications[0].options.body
+  assert.ok(Array.from(body).length <= 80)
+  assert.ok(body.endsWith('…'))
+  assert.ok(!body.includes('super'))
+})
+
+test('a composed body is clipped at 80 characters', () => {
+  const page = setup()
+  page.setFocused(false)
+  page.send({
+    kind: 'approval',
+    sessionId: 's1',
+    title: 'Build',
+    body: '',
+    meta: { toolName: 'Bash', reason: 'x'.repeat(200) },
+  })
+  const body = page.notifications[0].options.body
+  assert.equal(Array.from(body).length, 80)
+  assert.ok(body.endsWith('…'))
+})
+
+test('a completed turn keeps the host body when it has one', () => {
+  const page = setup()
+  page.setFocused(false)
+  page.send({
+    kind: 'turn-end',
+    sessionId: 's1',
+    title: 'Build',
+    body: '构建已通过。',
+    meta: { status: 'completed' },
+  })
+  assert.equal(page.notifications[0].options.body, '构建已通过。')
 })
